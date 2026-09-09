@@ -16,7 +16,6 @@ export const FloatingDiagnosticDock: React.FC = () => {
   const { requests } = useAppSelector((state) => state.network);
   const { errors } = useAppSelector((state) => state.errors);
   const { currentState } = useAppSelector((state) => state.stateMachine);
-  const { isLoopBlocked, loopProtectionBlockedCount } = useAppSelector((state) => state.video);
 
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
 
@@ -44,9 +43,6 @@ export const FloatingDiagnosticDock: React.FC = () => {
           {errors.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
           )}
-          {isLoopBlocked && (
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-          )}
           <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
         </button>
       ) : (
@@ -57,15 +53,10 @@ export const FloatingDiagnosticDock: React.FC = () => {
             type="button"
             onClick={() => dispatch(setInspectorOpen(true))}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-950/80 hover:bg-neutral-900 border border-neutral-800 text-neutral-300 font-mono text-[11px] transition"
-            title={`Redux State Machine: ${currentState}. Click to view state transitions & loop guard.`}
+            title={`Redux State Machine: ${currentState}. Click to view state transitions.`}
           >
             <Workflow className="w-3 h-3 text-purple-400" />
             <span className="text-purple-300 font-medium">{currentState}</span>
-            {isLoopBlocked && (
-              <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 text-[9px] font-bold animate-pulse">
-                LOOP! ({loopProtectionBlockedCount})
-              </span>
-            )}
           </button>
 
           {/* Network Inspector Button (Requirement 2) */}
