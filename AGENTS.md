@@ -43,7 +43,7 @@ This repository contains a hybrid architecture:
 | `src/store/*` | Redux slices, state machines, error logging, and traffic monitoring. |
 | `e2e/*` | Playwright test suites (e.g. caption detection tests). |
 | `src/index.css` | Global styling & Tailwind utilities. |
-| `install-apk.*` | Scripts for APK installation. |
+| `update.apk.sh` | Shell script for APK downloading and automated ADB installation. |
 
 ---
 
