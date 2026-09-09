@@ -395,6 +395,47 @@ export async function fetchYouTubeNativeTranslation({
   };
 }
 
+export const ON_DEMAND_FALLBACK_COUNT = 7;
+
+/**
+ * On-demand translation helper consuming data from `translateText`.
+ * Translates only the next X=7 subtitle records starting from startIndex.
+ */
+export async function translateOnDemandCues({
+  cues,
+  startIndex = 0,
+  count = ON_DEMAND_FALLBACK_COUNT,
+  targetLang,
+  sourceLang = 'auto',
+}: {
+  cues: CaptionCue[];
+  startIndex?: number;
+  count?: number;
+  targetLang: string;
+  sourceLang?: string;
+}): Promise<Record<string, string>> {
+  if (!cues || cues.length === 0) return {};
+  const cleanLang = normalizeLanguageCode(targetLang).split('-')[0];
+  const safeStart = Math.max(0, startIndex);
+  const safeEnd = Math.min(cues.length, safeStart + count);
+  const windowCues = cues.slice(safeStart, safeEnd);
+
+  const results: Record<string, string> = {};
+  await Promise.all(
+    windowCues.map(async (cue) => {
+      if (cue && cue.text) {
+        try {
+          const translated = await translateText(cue.text, sourceLang, cleanLang);
+          results[cue.id] = translated;
+        } catch (err) {
+          console.warn(`[OnDemandTranslation] Failed for cue ${cue.id}:`, err);
+        }
+      }
+    })
+  );
+  return results;
+}
+
 /**
  * Translates an entire track:
  * 1. BY DEFAULT: attempts YouTube native translation by repeating the observed subtitle request with tlang & fmt=srt.
@@ -470,18 +511,19 @@ export async function translateTrackWithNativeFirst({
     };
   }
 
-  // STEP 2: FALLBACK to current translation service (Google Translate GTX / sample)
-  console.log(`[Translation] YouTube native translation unavailable (${nativeResult.error || 'fallback'}), using fallback translation service for ${cleanLang}...`);
+  // STEP 2: FALLBACK to current translation service using translateText on-demand
+  console.log(`[Translation] YouTube native translation unavailable (${nativeResult.error || 'fallback'}), using on-demand fallback translation for next X=${ON_DEMAND_FALLBACK_COUNT} records for ${cleanLang}...`);
   languageSourceMap.set(cacheKey, 'google_translate_fallback');
   onStatusChange?.('google_translate_fallback');
 
-  const fallbackTranslations: Record<string, string> = {};
-  await Promise.all(
-    originalCues.map(async (cue) => {
-      const translated = await translateText(cue.text, sourceLang, cleanLang);
-      fallbackTranslations[cue.id] = translated;
-    })
-  );
+  // Consume data from translateText function using on demand translation: translate only the next X=7 subtitle records
+  const fallbackTranslations = await translateOnDemandCues({
+    cues: originalCues,
+    startIndex: 0,
+    count: ON_DEMAND_FALLBACK_COUNT,
+    targetLang: cleanLang,
+    sourceLang,
+  });
 
   return {
     source: 'google_translate_fallback',

@@ -5,6 +5,8 @@ import {
   translateText,
   prefetchCueTranslations,
   translateTrackWithNativeFirst,
+  translateOnDemandCues,
+  ON_DEMAND_FALLBACK_COUNT,
 } from '../lib/translateService';
 
 interface UseSyncEngineProps {
@@ -73,6 +75,34 @@ export function useSyncEngine({
       }
     });
   }, [cues, languages, observedUrl, videoId, sourceLang]);
+
+  // Requirement 4: On-demand fallback translation for next X=7 records when activeCueIndex changes
+  useEffect(() => {
+    if (!cues || cues.length === 0 || activeCueIndex < 0) return;
+    const enabledLangs = languages.filter((l) => l.enabled);
+    enabledLangs.forEach(async (lang) => {
+      try {
+        const nextTranslations = await translateOnDemandCues({
+          cues,
+          startIndex: activeCueIndex,
+          count: ON_DEMAND_FALLBACK_COUNT,
+          targetLang: lang.code,
+          sourceLang,
+        });
+        if (nextTranslations && Object.keys(nextTranslations).length > 0) {
+          setTranslations((prev) => {
+            const updated = { ...prev };
+            Object.entries(nextTranslations).forEach(([cId, text]) => {
+              updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+            });
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn(`[SyncEngine] On-demand pre-translation error for ${lang.code}:`, err);
+      }
+    });
+  }, [activeCueIndex, cues, languages, sourceLang]);
 
   /**
    * Helper to retrieve or fetch translation for a cue

@@ -32,6 +32,8 @@ import {
   SAMPLE_TRANSLATIONS,
   translateText,
   translateTrackWithNativeFirst,
+  translateOnDemandCues,
+  ON_DEMAND_FALLBACK_COUNT,
   getLanguageTranslationSource,
   isYouTubeNativeSource,
 } from '../lib/translateService';
@@ -236,6 +238,47 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
       });
     });
   }, [effectiveCues, targetLanguages, sourceLang, observedTimedTextUrl, videoId]);
+
+  // Requirement 4: On-demand fallback translation consuming translateText for only next X=7 subtitle records
+  useEffect(() => {
+    if (!effectiveCues || effectiveCues.length === 0) return;
+    const startIndex = Math.max(0, activeCueIndex);
+    const enabled = targetLanguages.filter((l) => l.enabled);
+
+    enabled.forEach((lang) => {
+      // Check if this language uses fallback translation
+      const source = langSources[lang.code];
+      if (source === 'google_translate_fallback' || !source) {
+        // Check if any of the next 7 cues are missing translations
+        const windowCues = effectiveCues.slice(startIndex, startIndex + ON_DEMAND_FALLBACK_COUNT);
+        const hasMissing = windowCues.some(
+          (c) => !tableTranslations[c.id]?.[lang.code] && !translations[c.id]?.[lang.code]
+        );
+
+        if (hasMissing) {
+          translateOnDemandCues({
+            cues: effectiveCues,
+            startIndex,
+            count: ON_DEMAND_FALLBACK_COUNT,
+            targetLang: lang.code,
+            sourceLang,
+          }).then((newTranslations) => {
+            if (newTranslations && Object.keys(newTranslations).length > 0) {
+              setTableTranslations((prev) => {
+                const updated = { ...prev };
+                Object.entries(newTranslations).forEach(([cId, text]) => {
+                  updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+                });
+                return updated;
+              });
+            }
+          }).catch((err) => {
+            console.warn(`On-demand translation error for ${lang.code}:`, err);
+          });
+        }
+      }
+    });
+  }, [activeCueIndex, effectiveCues, targetLanguages, langSources, sourceLang, translations, tableTranslations]);
 
   const getCueTranslation = (cue: CaptionCue, langCode: string): string => {
     if (translations[cue.id]?.[langCode]) return translations[cue.id][langCode];

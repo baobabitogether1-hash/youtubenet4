@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { cleanAndFixEncoding, parseRawCaptionData } from './src/utils/captionParser';
+import { buildYouTubeTranslatedTimedTextUrl } from './src/lib/translateService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,22 +172,11 @@ Do not include any conversational filler, markdown explanations, or code blocks 
         }
       }
 
-      // 3. Fallback: Provide clean default subtitles so the player is always functional
-      const fallbackCues = [
-        { id: 'cue-1', start: 0.0, duration: 4.0, text: 'Welcome to this YouTube video presentation.' },
-        { id: 'cue-2', start: 4.2, duration: 5.0, text: 'Follow along with the synchronized timed subtitles.' },
-        { id: 'cue-3', start: 9.5, duration: 4.8, text: 'Click any word to look up translations and hear pronunciation.' },
-        { id: 'cue-4', start: 14.5, duration: 5.5, text: 'Subtitles are automatically synchronized with the video playback.' },
-        { id: 'cue-5', start: 20.2, duration: 4.5, text: 'Enjoy practicing and improving your language skills!' },
-      ];
-
-      return res.json({
-        success: true,
+      // If both direct timedtext and Gemini transcription could not extract subtitles, report not found
+      return res.status(404).json({
+        success: false,
         videoId,
-        cues: fallbackCues,
-        count: fallbackCues.length,
-        observedUrl: directUrl || undefined,
-        source: 'auto_detected_captions',
+        error: `No accessible subtitles found or transcribed for video ${videoId}.`,
       });
     } catch (err: any) {
       console.error('Error in /api/fetch-subtitles:', err);
@@ -218,15 +208,10 @@ Do not include any conversational filler, markdown explanations, or code blocks 
         });
       }
 
-      // Build the repeated request with target language code and format
-      const urlObj = new URL(timedTextUrl);
-      urlObj.searchParams.set('tlang', targetLang);
-      if (format) {
-        urlObj.searchParams.set('fmt', format);
-      }
-      const finalUrl = urlObj.toString();
+      // Build the repeated request with target language code and format using buildYouTubeTranslatedTimedTextUrl
+      const finalUrl = buildYouTubeTranslatedTimedTextUrl(timedTextUrl, targetLang, format as any);
 
-      console.log(`[TimedText Translate] Repeating request for tlang=${targetLang}, fmt=${format}`);
+      console.log(`[TimedText Translate] Repeating request with buildYouTubeTranslatedTimedTextUrl for tlang=${targetLang}, fmt=${format}: ${finalUrl}`);
 
       const response = await fetch(finalUrl, {
         headers: {

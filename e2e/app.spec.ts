@@ -56,6 +56,54 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
     }
   });
 
+  /**
+   * USER REQUESTED TEST (unmocked):
+   * Ensure subtitles are correctly fetched when caption icon is pressed after input url: https://www.youtube.com/watch?v=c0pUbsq9FLk
+   */
+  test('ensure subtitles are correctly fetched when caption icon is pressed after input url: https://www.youtube.com/watch?v=c0pUbsq9FLk', async ({ page }) => {
+    const targetUrl = 'https://www.youtube.com/watch?v=c0pUbsq9FLk';
+
+    // 1. Input URL
+    const urlInput = page.locator('#youtube-url-input');
+    await expect(urlInput).toBeVisible();
+    await urlInput.fill(targetUrl);
+
+    // 2. Click Play to load video
+    const playButton = page.locator('#play-video-button');
+    await playButton.click();
+
+    // 3. Locate caption toggle button
+    const captionToggleButton = page.locator('#caption-toggle-button');
+    await expect(captionToggleButton).toBeVisible();
+
+    // 4. Click caption toggle button to fetch/toggle subtitles
+    const isPressed = await captionToggleButton.getAttribute('aria-pressed');
+    if (isPressed !== 'true') {
+      await captionToggleButton.click();
+    }
+    await expect(captionToggleButton).toHaveAttribute('aria-pressed', 'true');
+
+    // 5. Verify real subtitles are fetched (unmocked) and rendered
+    const subtitleCueRow = page.locator('#subtitle-cue-row-0');
+    const activeCueText = page.locator('#active-subtitle-cue-text');
+    const restoredToast = page.locator('#restored-subtitles-toast');
+
+    await expect(
+      subtitleCueRow.or(activeCueText).or(restoredToast).first()
+    ).toBeVisible({ timeout: 20000 });
+
+    // 6. Verify subtitles content is non-empty speech text
+    if ((await subtitleCueRow.count()) > 0) {
+      const text = await subtitleCueRow.first().textContent();
+      expect(text).toBeTruthy();
+      expect(text!.length).toBeGreaterThan(3);
+    } else if ((await activeCueText.count()) > 0) {
+      const activeText = await activeCueText.textContent();
+      expect(activeText).toBeTruthy();
+      expect(activeText!.length).toBeGreaterThan(3);
+    }
+  });
+
   // =========================================================================
   // SKIPPED TESTS (as instructed: currently skip other tests)
   // =========================================================================

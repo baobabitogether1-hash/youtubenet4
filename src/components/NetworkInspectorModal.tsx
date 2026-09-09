@@ -322,9 +322,16 @@ export const NetworkInspectorModal: React.FC = () => {
                 {selectedRequest.requestBody && (
                   <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                        Request Payload
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                          Request Payload
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono">
+                          {typeof selectedRequest.requestBody === 'string'
+                            ? `${selectedRequest.requestBody.length} chars`
+                            : `${JSON.stringify(selectedRequest.requestBody).length} chars`}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() =>
@@ -341,7 +348,7 @@ export const NetworkInspectorModal: React.FC = () => {
                         <span>Copy</span>
                       </button>
                     </div>
-                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-300 max-h-44">
+                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-300 max-h-64 whitespace-pre-wrap break-all">
                       {typeof selectedRequest.requestBody === 'object'
                         ? JSON.stringify(selectedRequest.requestBody, null, 2)
                         : String(selectedRequest.requestBody)}
@@ -352,9 +359,18 @@ export const NetworkInspectorModal: React.FC = () => {
                 {/* Response Body */}
                 <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      Response Payload
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                        Response Payload
+                      </span>
+                      {selectedRequest.responseBody && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono">
+                          {typeof selectedRequest.responseBody === 'string'
+                            ? `${selectedRequest.responseBody.length.toLocaleString()} chars`
+                            : `${JSON.stringify(selectedRequest.responseBody).length.toLocaleString()} chars`}
+                        </span>
+                      )}
+                    </div>
                     {selectedRequest.responseBody && (
                       <button
                         type="button"
@@ -369,7 +385,7 @@ export const NetworkInspectorModal: React.FC = () => {
                         className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
                       >
                         {copiedKey === 'res-body' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedKey === 'res-body' ? 'Copied!' : 'Copy Body'}</span>
+                        <span>{copiedKey === 'res-body' ? 'Copied Full Body!' : 'Copy Full Response'}</span>
                       </button>
                     )}
                   </div>
@@ -384,7 +400,7 @@ export const NetworkInspectorModal: React.FC = () => {
                       Error: {selectedRequest.error}
                     </div>
                   ) : (
-                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-200 max-h-80">
+                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-200 max-h-[32rem] whitespace-pre-wrap break-all">
                       {typeof selectedRequest.responseBody === 'object'
                         ? JSON.stringify(selectedRequest.responseBody, null, 2)
                         : String(selectedRequest.responseBody || '[Empty Response]')}

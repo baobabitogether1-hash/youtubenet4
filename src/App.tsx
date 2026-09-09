@@ -48,6 +48,7 @@ import {
   getObservedTimedTextUrl,
   saveObservedTimedTextUrl,
 } from './utils/subtitleCache';
+import { trackNetworkRequest } from './utils/networkInterceptor';
 import { ShieldAlert, CheckCircle2, Subtitles, X, RefreshCw } from 'lucide-react';
 
 const LIBRARY_STORAGE_KEY = 'yt_video_library_v2';
@@ -425,26 +426,11 @@ export default function App() {
       const errorMessage = err.message || 'Failed to fetch subtitles.';
       setFetchError(errorMessage);
 
-      // In web preview or test environment where backend /api is unreachable,
-      // provide auto-detected cues so subtitle viewer and teacher panel remain fully functional.
-      const fallbackCues: CaptionCue[] = [
-        { id: 'cue-1', start: 0.0, duration: 4.0, text: 'Welcome to this YouTube video presentation.' },
-        { id: 'cue-2', start: 4.2, duration: 5.0, text: 'Follow along with the synchronized timed subtitles.' },
-        { id: 'cue-3', start: 9.5, duration: 4.8, text: 'Click any word to look up translations and hear pronunciation.' },
-        { id: 'cue-4', start: 14.5, duration: 5.5, text: 'Subtitles are automatically synchronized with the video playback.' },
-        { id: 'cue-5', start: 20.2, duration: 4.5, text: 'Enjoy practicing and improving your language skills!' },
-      ];
-      setCustomCues(fallbackCues);
-      saveCachedSubtitles(idToFetch, fallbackCues, {
-        title: `Video ${idToFetch}`,
-        originalUrl: currentUrl,
-      });
-
       dispatch(
         addError({
           section: 'subtitles',
-          title: `Subtitle Extraction Notice (${idToFetch})`,
-          message: `${errorMessage} Loaded auto-detected subtitle track.`,
+          title: `Subtitle Extraction Error (${idToFetch})`,
+          message: errorMessage,
           details: { videoId: idToFetch, error: String(err) },
           stack: err?.stack,
         })
@@ -452,14 +438,11 @@ export default function App() {
 
       dispatch(
         transition({
-          to: 'captions_loaded',
-          actionName: 'FALLBACK_CAPTIONS_LOADED',
-          payload: { videoId: idToFetch, cueCount: fallbackCues.length },
+          to: 'error',
+          actionName: 'FETCH_SUBTITLES_ERROR',
+          payload: { videoId: idToFetch, error: errorMessage },
         })
       );
-
-      setRestoredToast(`Auto-detected ${fallbackCues.length} subtitles`);
-      setTimeout(() => setRestoredToast(null), 3000);
     } finally {
       setIsFetchingSubtitles(false);
     }
@@ -477,6 +460,24 @@ export default function App() {
           // Ensure rawData is properly decoded and parsed
           const cleanRawData = fixMojibake(payload.rawData || '');
           const { format, cues } = parseRawCaptionData(cleanRawData);
+
+          // Track in Network Inspector for full request/response visibility
+          try {
+            const netReq = trackNetworkRequest(
+              payload.url || 'https://www.youtube.com/api/timedtext',
+              'GET',
+              'timedtext_interception',
+              payload.headers || { Accept: 'text/xml,application/json,*/*' },
+              undefined
+            );
+            netReq.complete(payload.status || 200, cleanRawData, {
+              'content-type': payload.contentType || 'text/xml',
+              'content-length': String(cleanRawData.length),
+              'x-source': 'native_webview_interceptor',
+            });
+          } catch (netErr) {
+            console.warn('Could not record native interception in network tracker:', netErr);
+          }
 
           const data: InterceptedCaptionData = {
             id: `native-${Date.now()}`,
