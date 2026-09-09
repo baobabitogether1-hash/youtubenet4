@@ -3,7 +3,8 @@ import { NetworkRequestRecord } from './types';
 
 interface NetworkSliceState {
   requests: NetworkRequestRecord[];
-  filterType: 'all' | 'timedtext' | 'api' | 'translation' | 'failed';
+  filterType: 'all' | 'timedtext' | 'api' | 'translation' | 'failed' | 'success';
+  excludeErrors: boolean;
   searchQuery: string;
   selectedRequestId: string | null;
   isInspectorOpen: boolean;
@@ -12,6 +13,7 @@ interface NetworkSliceState {
 const initialState: NetworkSliceState = {
   requests: [],
   filterType: 'all',
+  excludeErrors: false,
   searchQuery: '',
   selectedRequestId: null,
   isInspectorOpen: false,
@@ -90,9 +92,15 @@ export const networkSlice = createSlice({
     },
     setFilterType: (
       state,
-      action: PayloadAction<'all' | 'timedtext' | 'api' | 'translation' | 'failed'>
+      action: PayloadAction<'all' | 'timedtext' | 'api' | 'translation' | 'failed' | 'success'>
     ) => {
       state.filterType = action.payload;
+    },
+    setExcludeErrors: (state, action: PayloadAction<boolean>) => {
+      state.excludeErrors = action.payload;
+    },
+    toggleExcludeErrors: (state) => {
+      state.excludeErrors = !state.excludeErrors;
     },
     setSearchQuery: (state, action: PayloadAction<string>) => {
       state.searchQuery = action.payload;
@@ -115,6 +123,8 @@ export const {
   recordRequestFailed,
   clearNetworkLogs,
   setFilterType,
+  setExcludeErrors,
+  toggleExcludeErrors,
   setSearchQuery,
   setSelectedRequestId,
   setNetworkInspectorOpen,

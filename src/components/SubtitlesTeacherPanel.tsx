@@ -202,6 +202,7 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
     playOrder,
     observedUrl: observedTimedTextUrl,
     videoId,
+    externalTranslations: tableTranslations,
   });
 
   // Default to YouTube native translation (repeating observed request with tlang & fmt=srt)
@@ -228,7 +229,11 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
           setTableTranslations((prev) => {
             const updated = { ...prev };
             Object.entries(res.translations).forEach(([cId, text]) => {
-              updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+              const cue = effectiveCues.find((c) => c.id === cId);
+              const isOrig = cue && text.trim().toLowerCase() === cue.text.trim().toLowerCase();
+              if (text && (!isOrig || lang.code === sourceLang)) {
+                updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+              }
             });
             return updated;
           });
@@ -256,20 +261,43 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
         );
 
         if (hasMissing) {
+          // Collect existing authentic translations for this language
+          const existingLangTrans: Record<string, string> = {};
+          effectiveCues.forEach((c) => {
+            const fromTable = tableTranslations[c.id]?.[lang.code];
+            const fromSync = translations[c.id]?.[lang.code];
+            if (fromTable && fromTable.trim().toLowerCase() !== c.text.trim().toLowerCase()) {
+              existingLangTrans[c.id] = fromTable;
+            } else if (fromSync && fromSync.trim().toLowerCase() !== c.text.trim().toLowerCase()) {
+              existingLangTrans[c.id] = fromSync;
+            }
+          });
+
           translateOnDemandCues({
             cues: effectiveCues,
             startIndex,
             count: ON_DEMAND_FALLBACK_COUNT,
             targetLang: lang.code,
             sourceLang,
+            existingTranslations: existingLangTrans,
           }).then((newTranslations) => {
             if (newTranslations && Object.keys(newTranslations).length > 0) {
               setTableTranslations((prev) => {
                 const updated = { ...prev };
+                let changed = false;
                 Object.entries(newTranslations).forEach(([cId, text]) => {
-                  updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+                  const cue = effectiveCues.find((c) => c.id === cId);
+                  const isOrig = cue && text.trim().toLowerCase() === cue.text.trim().toLowerCase();
+                  if (text && (!isOrig || lang.code === sourceLang)) {
+                    const current = updated[cId]?.[lang.code];
+                    const currentIsOrig = cue && current && current.trim().toLowerCase() === cue.text.trim().toLowerCase();
+                    if (!current || currentIsOrig) {
+                      updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+                      changed = true;
+                    }
+                  }
                 });
-                return updated;
+                return changed ? updated : prev;
               });
             }
           }).catch((err) => {
@@ -281,9 +309,23 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
   }, [activeCueIndex, effectiveCues, targetLanguages, langSources, sourceLang, translations, tableTranslations]);
 
   const getCueTranslation = (cue: CaptionCue, langCode: string): string => {
-    if (translations[cue.id]?.[langCode]) return translations[cue.id][langCode];
-    if (tableTranslations[cue.id]?.[langCode]) return tableTranslations[cue.id][langCode];
-    if (SAMPLE_TRANSLATIONS[cue.text]?.[langCode]) return SAMPLE_TRANSLATIONS[cue.text][langCode];
+    const fromTable = tableTranslations[cue.id]?.[langCode];
+    const fromSync = translations[cue.id]?.[langCode];
+    const sample = SAMPLE_TRANSLATIONS[cue.text]?.[langCode];
+
+    // Priority 1: Table translations (from native timedtext track) if NOT equal to cue.text
+    if (fromTable && fromTable.trim().toLowerCase() !== cue.text.trim().toLowerCase()) {
+      return fromTable;
+    }
+    // Priority 2: Sync engine translations if NOT equal to cue.text
+    if (fromSync && fromSync.trim().toLowerCase() !== cue.text.trim().toLowerCase()) {
+      return fromSync;
+    }
+    // Priority 3: Known sample translations
+    if (sample) return sample;
+    // Fallback: whatever was retrieved
+    if (fromTable) return fromTable;
+    if (fromSync) return fromSync;
     return '';
   };
 
@@ -792,17 +834,18 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
                   </thead>
                   <tbody className="divide-y divide-neutral-900 text-xs">
                     {filteredCues.map((cue, idx) => {
-                      const isSelected = activeCueIndex === idx;
+                      const realIndex = effectiveCues.findIndex((c) => c.id === cue.id);
+                      const targetIndex = realIndex !== -1 ? realIndex : idx;
+                      const isSelected = activeCueIndex === targetIndex;
 
                       return (
                         <tr
                           key={cue.id}
-                          id={`subtitle-cue-row-${idx}`}
-                          data-testid={`subtitle-cue-row-${idx}`}
+                          id={`subtitle-cue-row-${targetIndex}`}
+                          data-testid={`subtitle-cue-row-${targetIndex}`}
                           data-cue-id={cue.id}
                           onClick={() => {
-                            jumpToCue(idx);
-                            startSync(idx);
+                            jumpToCue(targetIndex);
                           }}
                           className={`cursor-pointer transition group ${
                             isSelected
@@ -818,8 +861,7 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
                                 title="Play from this timeframe"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  jumpToCue(idx);
-                                  startSync(idx);
+                                  startSync(targetIndex);
                                 }}
                                 className={`w-7 h-7 rounded-lg flex items-center justify-center transition ${
                                   isSelected && isSyncActive

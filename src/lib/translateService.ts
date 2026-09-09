@@ -407,12 +407,14 @@ export async function translateOnDemandCues({
   count = ON_DEMAND_FALLBACK_COUNT,
   targetLang,
   sourceLang = 'auto',
+  existingTranslations,
 }: {
   cues: CaptionCue[];
   startIndex?: number;
   count?: number;
   targetLang: string;
   sourceLang?: string;
+  existingTranslations?: Record<string, string>;
 }): Promise<Record<string, string>> {
   if (!cues || cues.length === 0) return {};
   const cleanLang = normalizeLanguageCode(targetLang).split('-')[0];
@@ -423,13 +425,26 @@ export async function translateOnDemandCues({
   const results: Record<string, string> = {};
   await Promise.all(
     windowCues.map(async (cue) => {
-      if (cue && cue.text) {
-        try {
-          const translated = await translateText(cue.text, sourceLang, cleanLang);
+      if (!cue || !cue.text) return;
+
+      // If an authentic translation already exists and is not just the original text, preserve it!
+      const existing = existingTranslations?.[cue.id];
+      if (existing && existing.trim().toLowerCase() !== cue.text.trim().toLowerCase()) {
+        results[cue.id] = existing;
+        return;
+      }
+
+      try {
+        const translated = await translateText(cue.text, sourceLang, cleanLang);
+        const isOriginalSentence = translated.trim().toLowerCase() === cue.text.trim().toLowerCase();
+
+        // CRITICAL: Only accept translation if it is non-empty and NOT the untranslated original sentence
+        // (unless the target language really is the source language)
+        if (translated && (!isOriginalSentence || cleanLang === sourceLang)) {
           results[cue.id] = translated;
-        } catch (err) {
-          console.warn(`[OnDemandTranslation] Failed for cue ${cue.id}:`, err);
         }
+      } catch (err) {
+        console.warn(`[OnDemandTranslation] Failed for cue ${cue.id}:`, err);
       }
     })
   );
