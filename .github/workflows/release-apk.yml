@@ -182,7 +182,7 @@ jobs:
 
             ### 📦 Download Links
             - **[Download YouTube-Viewer-debug.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.release_info.outputs.TAG }}/YouTube-Viewer-debug.apk)** (Latest APK - Ready to install)
-            - Automated install script available in repository: `update.apk.sh` (Bash)
+            - Automated install script available in repository: `install-apk.bat` (Windows) / `install-apk.ps1` (PowerShell) / `install-apk.sh` (Bash)
 
             ---
 
