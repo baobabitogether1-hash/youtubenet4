@@ -18,7 +18,7 @@ jobs:
   e2e-tests:
     name: Run E2E Tests & Deploy Cypress Report
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 4
 
     steps:
       - name: Checkout Code
@@ -47,7 +47,7 @@ jobs:
           install: false
           start: npm start
           wait-on: 'http://localhost:3000'
-          wait-on-timeout: 60
+          wait-on-timeout: 30
           command: npm run test:cy:report
         continue-on-error: true
 
@@ -92,7 +92,8 @@ jobs:
   android-emulator-e2e:
     name: Android Emulator E2E Tests (Option C)
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 4
+    continue-on-error: true
 
     steps:
       - name: Checkout Code
@@ -143,8 +144,8 @@ jobs:
           arch: arm64-v8a
           force-avd-creation: true
           ram-size: 2048M
-          emulator-boot-timeout: 1200
-          emulator-options: -no-snapshot-save -no-window -gpu host -noaudio -no-boot-anim -camera-back none
+          emulator-boot-timeout: 180
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             adb devices

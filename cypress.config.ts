@@ -2,6 +2,11 @@ import { defineConfig } from 'cypress';
 import cypressMochawesomeReporterPlugin from 'cypress-mochawesome-reporter/plugin';
 
 export default defineConfig({
+  defaultCommandTimeout: 10000,
+  requestTimeout: 10000,
+  responseTimeout: 10000,
+  pageLoadTimeout: 20000,
+  taskTimeout: 30000,
   reporter: 'cypress-mochawesome-reporter',
   reporterOptions: {
     reportDir: 'cypress/reports',
@@ -22,9 +27,6 @@ export default defineConfig({
     screenshotOnRunFailure: true,
     screenshotsFolder: 'cypress/screenshots',
     videosFolder: 'cypress/videos',
-    defaultCommandTimeout: 15000,
-    requestTimeout: 15000,
-    responseTimeout: 15000,
     setupNodeEvents(on, config) {
       cypressMochawesomeReporterPlugin(on);
       return config;
