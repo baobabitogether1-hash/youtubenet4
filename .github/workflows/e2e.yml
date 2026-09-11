@@ -47,6 +47,8 @@ jobs:
           install: false
           start: npm start
           wait-on: 'http://localhost:3000'
+          wait-on-timeout: 60
+          command: npm run test:cy:report
         continue-on-error: true
 
       - name: Prepare Video & Step Screenshot Assets for GitHub Pages
