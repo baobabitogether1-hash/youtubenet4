@@ -1,4 +1,12 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Ensure screenshots directory exists
+const assetsDir = path.join(process.cwd(), 'cypress', 'reports', 'assets');
+if (!fs.existsSync(assetsDir)) {
+  fs.mkdirSync(assetsDir, { recursive: true });
+}
 
 test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
   test.beforeEach(async ({ page }) => {
@@ -17,6 +25,7 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
 
     await test.step('Step 1: Locate the caption toggle icon on the video player', async () => {
       await expect(captionToggleButton).toBeVisible();
+      await page.screenshot({ path: 'cypress/reports/assets/test1-step1.png' });
     });
 
     await test.step('Step 2: Toggle caption icon to ON', async () => {
@@ -24,10 +33,12 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
       if (isPressed !== 'true') {
         await captionToggleButton.click();
       }
+      await page.screenshot({ path: 'cypress/reports/assets/test1-step2.png' });
     });
 
     await test.step('Step 3: Verify caption toggle button state is ON (aria-pressed=true)', async () => {
       await expect(captionToggleButton).toHaveAttribute('aria-pressed', 'true');
+      await page.screenshot({ path: 'cypress/reports/assets/test1-step3.png' });
     });
 
     const subtitleCueRow = page.locator('#subtitle-cue-row-0');
@@ -38,6 +49,7 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
       await expect(
         subtitleCueRow.or(activeCueText).or(restoredToast).first()
       ).toBeVisible({ timeout: 15000 });
+      await page.screenshot({ path: 'cypress/reports/assets/test1-step4.png' });
     });
 
     await test.step('Step 5: Verify detected caption text is non-empty spoken dialogue', async () => {
@@ -50,6 +62,7 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
         expect(activeText).toBeTruthy();
         expect(activeText!.length).toBeGreaterThan(3);
       }
+      await page.screenshot({ path: 'cypress/reports/assets/test1-step5.png' });
     });
 
     await test.step('Step 6: Confirm Redux State Machine reached active status', async () => {
@@ -57,6 +70,7 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
       if ((await stateBadge.count()) > 0) {
         await expect(stateBadge).toBeVisible();
       }
+      await page.screenshot({ path: 'cypress/reports/assets/test1-step6.png' });
     });
   });
 
@@ -76,14 +90,17 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
     await test.step('Step 1: Enter custom YouTube URL into input field', async () => {
       await expect(urlInput).toBeVisible();
       await urlInput.fill(targetUrl);
+      await page.screenshot({ path: 'cypress/reports/assets/test2-step1.png' });
     });
 
     await test.step('Step 2: Click Play button to cue the video', async () => {
       await playButton.click();
+      await page.screenshot({ path: 'cypress/reports/assets/test2-step2.png' });
     });
 
     await test.step('Step 3: Locate caption toggle button', async () => {
       await expect(captionToggleButton).toBeVisible();
+      await page.screenshot({ path: 'cypress/reports/assets/test2-step3.png' });
     });
 
     await test.step('Step 4: Click caption toggle button to activate subtitles', async () => {
@@ -92,12 +109,14 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
         await captionToggleButton.click();
       }
       await expect(captionToggleButton).toHaveAttribute('aria-pressed', 'true');
+      await page.screenshot({ path: 'cypress/reports/assets/test2-step4.png' });
     });
 
     await test.step('Step 5: Verify real subtitles are fetched and rendered in the viewer', async () => {
       await expect(
         subtitleCueRow.or(activeCueText).or(restoredToast).first()
       ).toBeVisible({ timeout: 20000 });
+      await page.screenshot({ path: 'cypress/reports/assets/test2-step5.png' });
     });
 
     await test.step('Step 6: Verify subtitle content is non-empty speech text', async () => {
@@ -110,6 +129,7 @@ test.describe('YouTube Video Viewer - Subtitle Auto-Detection Tests', () => {
         expect(activeText).toBeTruthy();
         expect(activeText!.length).toBeGreaterThan(3);
       }
+      await page.screenshot({ path: 'cypress/reports/assets/test2-step6.png' });
     });
   });
 

@@ -49,6 +49,10 @@ jobs:
           wait-on: 'http://localhost:3000'
         continue-on-error: true
 
+      - name: Prepare Video & Step Screenshot Assets for GitHub Pages
+        if: always()
+        run: node scripts/prepare-report.mjs
+
       - name: Upload Playwright Test Report & Artifacts
         if: always()
         uses: actions/upload-artifact@v4
