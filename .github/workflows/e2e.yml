@@ -68,7 +68,7 @@ jobs:
       - name: Install Web Dependencies
         run: |
           npm install --include=optional
-          npm install @rollup/rollup-darwin-arm64 --no-save || true
+          npm install @rollup/rollup-darwin-arm64 lightningcss-darwin-arm64 @tailwindcss/oxide-darwin-arm64 --no-save || true
 
       - name: Build Web Application
         run: npm run build

@@ -1,13 +1,9 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { cleanAndFixEncoding, parseRawCaptionData } from './src/utils/captionParser';
 import { buildYouTubeTranslatedTimedTextUrl } from './src/lib/translateService';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function discoverTimedTextUrlForVideo(videoId: string): Promise<string | null> {
   try {
