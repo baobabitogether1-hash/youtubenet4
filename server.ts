@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
 import { cleanAndFixEncoding, parseRawCaptionData } from './src/utils/captionParser';
 import { buildYouTubeTranslatedTimedTextUrl } from './src/lib/translateService';
 
@@ -71,108 +70,23 @@ async function startServer() {
             }
           }
         } catch (directErr) {
-          console.warn(`[Server] Direct caption fetch failed for ${videoId}, trying AI / fallback:`, directErr);
+          console.warn(`[Server] Direct caption fetch failed for ${videoId}:`, directErr);
         }
       }
 
-      // 2. Try Gemini AI if API key is configured
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (apiKey) {
-        try {
-          const ai = new GoogleGenAI({ apiKey });
-          const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-          const prompt = `Transcribe the spoken audio of this YouTube video into sequential, timed subtitle cues for language learning.
-Return ONLY a valid JSON array of objects with the following schema:
-[
-  {
-    "id": "cue-1",
-    "start": 0.0,
-    "duration": 3.2,
-    "text": "Exact spoken sentence or dialogue segment..."
-  }
-]
-Requirements:
-1. "start": start time in seconds (float or integer, e.g. 1.5). Must be chronological.
-2. "duration": duration of the segment in seconds (minimum 1.5s).
-3. "text": accurate spoken words in the video's spoken language.
-4. "id": unique identifier string like "cue-1", "cue-2", etc.
-Do not include any conversational filler, markdown explanations, or code blocks other than the raw JSON or json codeblock.`;
-
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    fileData: {
-                      fileUri: videoUrl,
-                      mimeType: 'video/*',
-                    },
-                  },
-                  {
-                    text: prompt,
-                  },
-                ],
-              },
-            ],
-          });
-
-          const rawText = response.text || '';
-          let cleaned = rawText.trim();
-          if (cleaned.startsWith('```json')) {
-            cleaned = cleaned.slice(7);
-          } else if (cleaned.startsWith('```')) {
-            cleaned = cleaned.slice(3);
-          }
-          if (cleaned.endsWith('```')) {
-            cleaned = cleaned.slice(0, -3);
-          }
-          cleaned = cleaned.trim();
-
-          let parsedCues: Array<{ id: string; start: number; duration: number; text: string }> = [];
-          try {
-            parsedCues = JSON.parse(cleaned);
-          } catch (parseErr) {
-            const jsonArrayMatch = cleaned.match(/\[[\s\S]*\]/);
-            if (jsonArrayMatch) {
-              parsedCues = JSON.parse(jsonArrayMatch[0]);
-            }
-          }
-
-          if (Array.isArray(parsedCues) && parsedCues.length > 0) {
-            const cues = parsedCues
-              .map((c, idx) => ({
-                id: c.id || `cue-${idx + 1}`,
-                start: typeof c.start === 'number' && !isNaN(c.start) ? Math.max(0, c.start) : idx * 3,
-                duration:
-                  typeof c.duration === 'number' && !isNaN(c.duration) ? Math.max(1.0, c.duration) : 3.0,
-                text: cleanAndFixEncoding(String(c.text || '')),
-              }))
-              .filter((c) => c.text.length > 0);
-
-            if (cues.length > 0) {
-              return res.json({
-                success: true,
-                videoId,
-                cues,
-                count: cues.length,
-                observedUrl: directUrl || undefined,
-                source: 'gemini_ai_transcription',
-              });
-            }
-          }
-        } catch (aiErr) {
-          console.warn(`[Server] Gemini transcription failed for ${videoId}:`, aiErr);
-        }
-      }
-
-      // If both direct timedtext and Gemini transcription could not extract subtitles, report not found
+      // 2. Note: Subtitle fetching via GEMINI_API_KEY is DEPRECATED.
+      // The application's core feature is natively accessing available subtitles that are
+      // natively downloaded or intercepted while playing the YouTube video (via WebViewClient
+      // or player timedtext streams).
       return res.status(404).json({
         success: false,
         videoId,
-        error: `No accessible subtitles found or transcribed for video ${videoId}.`,
+        error: `No native timedtext subtitles found for YouTube video ${videoId}. Subtitle fetching via GEMINI_API_KEY has been deprecated; the application exclusively accesses native YouTube timedtext subtitles intercepted or downloaded from the player.`,
+        source: 'none',
+        deprecated: {
+          feature: 'gemini_subtitle_transcription',
+          reason: 'Deprecated in favor of native YouTube player timedtext interception.',
+        },
       });
     } catch (err: any) {
       console.error('Error in /api/fetch-subtitles:', err);

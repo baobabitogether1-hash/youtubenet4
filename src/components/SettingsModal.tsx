@@ -185,7 +185,7 @@ export function SettingsModal({
                     Server Subtitle Extraction API
                   </div>
                   <div className="text-xs text-neutral-400">
-                    Server-side extraction fallback via /api/fetch-subtitles endpoint.
+                    Direct YouTube timedtext extraction (GEMINI_API_KEY transcription deprecated; relies on native player captions).
                   </div>
                 </div>
                 <input
