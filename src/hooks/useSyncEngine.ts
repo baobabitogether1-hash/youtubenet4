@@ -3,11 +3,11 @@ import { CaptionCue, TargetLanguage, SyncPlayOrder, YouTubePlayerHandle } from '
 import { speakText, stopTTS, isTTSSpeaking, getTTSEngineType } from '../lib/ttsEngine';
 import {
   translateText,
-  prefetchCueTranslations,
-  translateTrackWithNativeFirst,
   translateOnDemandCues,
+  prefetchCueTranslations,
   ON_DEMAND_FALLBACK_COUNT,
 } from '../lib/translateService';
+import { logSync, logTTS } from '../utils/logBuffer';
 
 interface UseSyncEngineProps {
   cues: CaptionCue[];
@@ -53,41 +53,7 @@ export function useSyncEngine({
     };
   }, []);
 
-  // Prepopulate translations using YouTube Native timedtext translation by default (fallback to GTX)
-  useEffect(() => {
-    if (!cues || cues.length === 0) return;
-    const enabledLangs = languages.filter((l) => l.enabled);
-    enabledLangs.forEach(async (lang) => {
-      try {
-        const result = await translateTrackWithNativeFirst({
-          originalCues: cues,
-          targetLang: lang.code,
-          observedUrl,
-          videoId,
-          sourceLang,
-        });
-        if (result.translations) {
-          setTranslations((prev) => {
-            const updated = { ...prev };
-            let hasChanges = false;
-            Object.entries(result.translations).forEach(([cId, text]) => {
-              const cue = cues.find((c) => c.id === cId);
-              const isOrig = cue && text.trim().toLowerCase() === cue.text.trim().toLowerCase();
-              if (text && (!isOrig || lang.code === sourceLang)) {
-                updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
-                hasChanges = true;
-              }
-            });
-            return hasChanges ? updated : prev;
-          });
-        }
-      } catch (err) {
-        console.warn(`[SyncEngine] Pre-translation error for ${lang.code}:`, err);
-      }
-    });
-  }, [cues, languages, observedUrl, videoId, sourceLang]);
-
-  // Requirement 4: On-demand fallback translation for next X=7 records when activeCueIndex changes
+  // Step 2.3 & 4.4: On-demand fallback translation for next X=4 records ONLY when playback reaches a cue
   useEffect(() => {
     if (!cues || cues.length === 0 || activeCueIndex < 0) return;
     const enabledLangs = languages.filter((l) => l.enabled);
@@ -135,7 +101,7 @@ export function useSyncEngine({
           });
         }
       } catch (err) {
-        console.warn(`[SyncEngine] On-demand pre-translation error for ${lang.code}:`, err);
+        console.warn(`[SyncEngine] On-demand translation error for ${lang.code}:`, err);
       }
     });
   }, [activeCueIndex, cues, languages, sourceLang]);
@@ -304,6 +270,7 @@ export function useSyncEngine({
       while (idx < cues.length && !abortRef.current) {
         const cue = cues[idx];
         setActiveCueIndex(idx);
+        logSync('SyncLoop', `Block ${idx + 1}/${cues.length} [${playOrder}] starting: "${cue.text.substring(0, 35)}..."`);
 
         // Background prefetch translations for upcoming cues
         if (enabledLangs.length > 0) {
@@ -314,6 +281,7 @@ export function useSyncEngine({
 
         if (playOrder === 'video_first') {
           // 1. Play video segment (TTS is silent)
+          logSync('SyncLoop', `[Block ${idx + 1}] Step 1: Playing video segment (${cue.start.toFixed(1)}s - ${(cue.start + cue.duration).toFixed(1)}s)`);
           await playVideoCueSegment(cue);
           if (abortRef.current) break;
 
@@ -324,11 +292,13 @@ export function useSyncEngine({
 
           // 2. TTS-play translations in sequence (Video is paused)
           if (enabledLangs.length > 0) {
+            logSync('SyncLoop', `[Block ${idx + 1}] Step 2: Playing sequential TTS translations`);
             const completed = await playCueTTSSequence(cue, enabledLangs);
             if (!completed || abortRef.current) break;
           }
         } else {
           // 1. TTS first: translate and narrate (Video MUST remain paused)
+          logSync('SyncLoop', `[Block ${idx + 1}] Step 1: Playing sequential TTS translations (Video paused)`);
           playerRef.current?.pause();
           await new Promise((r) => setTimeout(r, 120));
           if (abortRef.current) break;
@@ -344,6 +314,7 @@ export function useSyncEngine({
           if (abortRef.current) break;
 
           // 2. Play video segment (TTS is silent)
+          logSync('SyncLoop', `[Block ${idx + 1}] Step 2: Playing video segment (${cue.start.toFixed(1)}s - ${(cue.start + cue.duration).toFixed(1)}s)`);
           await playVideoCueSegment(cue);
           if (abortRef.current) break;
 
@@ -351,6 +322,7 @@ export function useSyncEngine({
           playerRef.current?.pause();
         }
 
+        logSync('SyncLoop', `[Block ${idx + 1}] Finished block cleanly. Transitioning to next...`);
         // Small inter-cue delay
         await new Promise((r) => setTimeout(r, 200));
         idx++;

@@ -5,6 +5,7 @@ import {
   recordRequestFailed,
 } from '../store/networkSlice';
 import { addError } from '../store/errorsSlice';
+import { logNetwork, logError } from './logBuffer';
 
 let isInterceptorInitialized = false;
 
@@ -19,6 +20,7 @@ export function trackNetworkRequest(
   requestBody?: any
 ) {
   const id = `manual-net-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const startTime = Date.now();
   store.dispatch(
     recordRequestStart({
       id,
@@ -32,22 +34,43 @@ export function trackNetworkRequest(
   return {
     id,
     complete: (status: number, responseBody?: any, headers?: Record<string, string>) => {
+      const duration = Date.now() - startTime;
       store.dispatch(
         recordRequestComplete({
           id,
           status,
           responseBody,
           responseHeaders: headers,
+          duration,
         })
       );
+      logNetwork({
+        category: type,
+        url,
+        method,
+        status,
+        duration,
+        responseBody,
+        message: `${method} ${url} completed (${status})`,
+      });
     },
     fail: (error: string) => {
+      const duration = Date.now() - startTime;
       store.dispatch(
         recordRequestFailed({
           id,
           error,
+          duration,
         })
       );
+      logNetwork({
+        category: type,
+        url,
+        method,
+        status: 0,
+        duration,
+        message: `${method} ${url} failed: ${error}`,
+      });
     },
   };
 }

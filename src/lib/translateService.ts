@@ -120,7 +120,7 @@ export async function translateText(
 export async function prefetchCueTranslations(
   cues: CaptionCue[],
   startIndex: number,
-  count: number = 6,
+  count: number = 4,
   fromLang: string,
   toLang: string
 ): Promise<void> {
@@ -395,7 +395,7 @@ export async function fetchYouTubeNativeTranslation({
   };
 }
 
-export const ON_DEMAND_FALLBACK_COUNT = 7;
+export const ON_DEMAND_FALLBACK_COUNT = 4;
 
 /**
  * On-demand translation helper consuming data from `translateText`.
