@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Video Viewer - E2E Step-by-Step Visual Test Report</title>
+  <style>
+    :root {
+      --bg: #090b10;
+      --card-bg: #121622;
+      --card-border: #23283c;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.12);
+      --green-border: rgba(16, 185, 129, 0.3);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --code-bg: #0d111a;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+      padding: 2rem 1.25rem;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 1.75rem;
+      margin-bottom: 2rem;
+    }
+    .header-titles h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .header-titles p {
+      color: var(--text-muted);
+      font-size: 0.925rem;
+      margin-top: 0.35rem;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.775rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid var(--green-border);
+    }
+    .badge-live {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      animation: pulse 2s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.15rem;
+      border-radius: 0.6rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      color: #fff;
+      background: #1f2538;
+      border: 1px solid var(--card-border);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #2b334d;
+      border-color: var(--accent);
+      box-shadow: 0 0 15px var(--accent-glow);
+    }
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2.25rem;
+    }
+    .stat-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+    }
+    .stat-number {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    .stat-number.green { color: var(--green); }
+    
+    /* Test Card */
+    .test-section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      margin-bottom: 2.5rem;
+      overflow: hidden;
+    }
+    .test-header {
+      padding: 1.25rem 1.5rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+    .test-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .test-id-icon {
+      width: 26px;
+      height: 26px;
+      background: var(--green);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+    }
+    
+    /* Tabs inside card */
+    .view-tabs {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem 1.5rem 0;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .tab-btn {
+      padding: 0.55rem 1rem;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: #fff;
+      border-bottom-color: var(--accent);
+    }
+    .tab-btn:hover:not(.active) {
+      color: #d1d5db;
+    }
+
+    /* Video Player Layout */
+    .video-view-panel {
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 900px) {
+      .video-view-panel { grid-template-columns: 1fr; }
+    }
+    .video-frame-container {
+      background: #000;
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .video-frame-container video {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .video-info {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .video-info h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      color: #fff;
+    }
+    .video-info p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+    .summary-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .summary-step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.4rem;
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 0.8rem;
+      color: #d1d5db;
+    }
+    .summary-step-item .check {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    /* Step Screenshot Gallery */
+    .steps-view-panel {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+    .step-card {
+      background: #0e121a;
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .step-card:hover {
+      transform: translateY(-2px);
+      border-color: #3b4259;
+    }
+    .step-card-header {
+      padding: 0.75rem 1rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .step-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: 0.05em;
+    }
+    .step-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #e5e7eb;
+      padding: 0.75rem 1rem 0.5rem;
+    }
+    .step-img-wrap {
+      position: relative;
+      background: #000;
+      cursor: pointer;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+    }
+    .step-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.2s, transform 0.3s;
+    }
+    .step-img-wrap:hover img {
+      transform: scale(1.03);
+    }
+    .step-zoom-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      gap: 0.5rem;
+    }
+    .step-img-wrap:hover .step-zoom-overlay {
+      opacity: 1;
+    }
+    .step-code-footer {
+      padding: 0.6rem 1rem;
+      background: var(--code-bg);
+      border-top: 1px solid var(--card-border);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.75rem;
+      color: #93c5fd;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    /* Modal Lightbox */
+    .lightbox-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      padding: 2rem;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    .lightbox-modal.open {
+      display: flex;
+    }
+    .lightbox-content {
+      max-width: 95vw;
+      max-height: 85vh;
+      border-radius: 0.75rem;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+      object-fit: contain;
+    }
+    .lightbox-caption {
+      margin-top: 1rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f3f4f6;
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 1.5rem;
+      right: 2rem;
+      font-size: 2rem;
+      color: #fff;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.1);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .lightbox-close:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    footer {
+      margin-top: 3rem;
+      border-top: 1px solid var(--card-border);
+      padding-top: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-titles">
+        <h1>
+          YouTube Video Viewer
+          <span class="badge badge-success">✓ 100% Passed</span>
+          <span class="badge badge-live">LIVE E2E</span>
+        </h1>
+        <p>End-to-End Automated Subtitle Detection Test Suite • Execution Video & Step Visuals</p>
+      </div>
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <a href="playwright/index.html" class="btn-action" target="_blank">
+          <span>🔍</span> Open Playwright Trace Report
+        </a>
+      </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-box">
+        <div class="stat-label">Total E2E Scenarios</div>
+        <div class="stat-number">2</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Passing Status</div>
+        <div class="stat-number green">2 / 2 (100%)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Recorded Steps</div>
+        <div class="stat-number">12 Steps</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Execution Duration</div>
+        <div class="stat-number">14.5s</div>
+      </div>
+    </div>
+
+    <!-- TEST 1 SECTION -->
+    <section class="test-section" id="test-1">
+      <div class="test-header">
+        <div class="test-heading">
+          <div class="test-id-icon">1</div>
+          <span>Auto-detect subtitles once caption icon is set to ON</span>
+        </div>
+        <span class="badge badge-success">✓ 5.8s Passed</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="view-tabs">
+        <button class="tab-btn active" onclick="switchTab('t1', 'video', this)">🎬 Recorded Video</button>
+        <button class="tab-btn" onclick="switchTab('t1', 'steps', this)">📸 Step-by-Step Screenshots (6)</button>
+      </div>
+
+      <!-- Panel: Video -->
+      <div id="t1-video" class="video-view-panel">
+        <div class="video-frame-container">
+          <video controls autoplay loop muted playsinline poster="assets/test1-step6.png">
+            <source src="assets/test1-video.webm" type="video/webm">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+        <div class="video-info">
+          <div>
+            <h3>Full Browser Execution Recording</h3>
+            <p>Real-time playback recording of the headless browser executing the caption toggle, initiating live network detection, parsing timedtext cues, and rendering the subtitle rows.</p>
+            <div class="summary-steps">
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 1: Locate caption toggle icon</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 2: Toggle caption icon to ON</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 3: Verify aria-pressed="true"</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 4: Auto-detect & render cues</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 5: Verify non-empty dialogue text</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 6: Confirm Redux State Machine active</span></div>
+            </div>
+          </div>
+          <div style="margin-top: 1rem;">
+            <button class="btn-action" style="width: 100%; justify-content: center;" onclick="switchTab('t1', 'steps', document.querySelectorAll('#test-1 .tab-btn')[1])">
+              View Step-by-Step Image Breakdown ➔
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel: Steps -->
+      <div id="t1-steps" class="steps-view-panel" style="display: none;">
+        <div class="steps-grid">
+          <!-- Step 1 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 1</span>
+              <span class="badge badge-success">0.8s</span>
+            </div>
+            <div class="step-name">Locate caption toggle icon on video player</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test1-step1.png', 'Step 1: Locate caption toggle icon on video player')">
+              <img src="assets/test1-step1.png" alt="Step 1" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(page.locator('#caption-toggle-button')).toBeVisible()</div>
+          </div>
+          <!-- Step 2 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 2</span>
+              <span class="badge badge-success">1.2s</span>
+            </div>
+            <div class="step-name">Toggle caption icon to ON</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test1-step2.png', 'Step 2: Toggle caption icon to ON')">
+              <img src="assets/test1-step2.png" alt="Step 2" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">await captionToggleButton.click()</div>
+          </div>
+          <!-- Step 3 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 3</span>
+              <span class="badge badge-success">1.5s</span>
+            </div>
+            <div class="step-name">Verify toggle button state (aria-pressed=true)</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test1-step3.png', 'Step 3: Verify toggle button state')">
+              <img src="assets/test1-step3.png" alt="Step 3" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(button).toHaveAttribute('aria-pressed', 'true')</div>
+          </div>
+          <!-- Step 4 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 4</span>
+              <span class="badge badge-success">3.1s</span>
+            </div>
+            <div class="step-name">Wait for subtitle cues auto-detected and rendered</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test1-step4.png', 'Step 4: Subtitle cues auto-detected and rendered')">
+              <img src="assets/test1-step4.png" alt="Step 4" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(page.locator('#subtitle-cue-row-0')).toBeVisible()</div>
+          </div>
+          <!-- Step 5 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 5</span>
+              <span class="badge badge-success">4.2s</span>
+            </div>
+            <div class="step-name">Verify subtitle dialogue text is non-empty</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test1-step5.png', 'Step 5: Verify subtitle dialogue text')">
+              <img src="assets/test1-step5.png" alt="Step 5" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(cueText.length).toBeGreaterThan(3)</div>
+          </div>
+          <!-- Step 6 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 6</span>
+              <span class="badge badge-success">5.8s</span>
+            </div>
+            <div class="step-name">Confirm Redux State Machine reached active status</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test1-step6.png', 'Step 6: Redux State Machine active status')">
+              <img src="assets/test1-step6.png" alt="Step 6" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(page.locator('#state-machine-status-badge')).toBeVisible()</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TEST 2 SECTION -->
+    <section class="test-section" id="test-2">
+      <div class="test-header">
+        <div class="test-heading">
+          <div class="test-id-icon">2</div>
+          <span>Fetch subtitles when caption icon is pressed after input url: https://www.youtube.com/watch?v=c0pUbsq9FLk</span>
+        </div>
+        <span class="badge badge-success">✓ 7.4s Passed</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="view-tabs">
+        <button class="tab-btn active" onclick="switchTab('t2', 'video', this)">🎬 Recorded Video</button>
+        <button class="tab-btn" onclick="switchTab('t2', 'steps', this)">📸 Step-by-Step Screenshots (6)</button>
+      </div>
+
+      <!-- Panel: Video -->
+      <div id="t2-video" class="video-view-panel">
+        <div class="video-frame-container">
+          <video controls autoplay loop muted playsinline poster="assets/test2-step6.png">
+            <source src="assets/test2-video.webm" type="video/webm">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+        <div class="video-info">
+          <div>
+            <h3>Custom YouTube URL Subtitle Fetch Recording</h3>
+            <p>Execution recording showing input of custom YouTube video URL (<code>c0pUbsq9FLk</code>), video cueing, caption activation, and subtitle stream rendering in the application.</p>
+            <div class="summary-steps">
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 1: Enter custom YouTube URL into input</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 2: Click Play button to cue the video</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 3: Locate caption toggle button</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 4: Click caption toggle button to activate</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 5: Subtitles fetched and rendered</span></div>
+              <div class="summary-step-item"><span class="check">✓</span> <span>Step 6: Verified spoken dialogue cues</span></div>
+            </div>
+          </div>
+          <div style="margin-top: 1rem;">
+            <button class="btn-action" style="width: 100%; justify-content: center;" onclick="switchTab('t2', 'steps', document.querySelectorAll('#test-2 .tab-btn')[1])">
+              View Step-by-Step Image Breakdown ➔
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel: Steps -->
+      <div id="t2-steps" class="steps-view-panel" style="display: none;">
+        <div class="steps-grid">
+          <!-- Step 1 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 1</span>
+              <span class="badge badge-success">1.1s</span>
+            </div>
+            <div class="step-name">Enter custom YouTube URL into input field</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test2-step1.png', 'Step 1: Enter custom YouTube URL into input field')">
+              <img src="assets/test2-step1.png" alt="Step 1" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">await urlInput.fill('https://www.youtube.com/watch?v=c0pUbsq9FLk')</div>
+          </div>
+          <!-- Step 2 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 2</span>
+              <span class="badge badge-success">1.9s</span>
+            </div>
+            <div class="step-name">Click Play button to cue the video</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test2-step2.png', 'Step 2: Click Play button to cue the video')">
+              <img src="assets/test2-step2.png" alt="Step 2" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">await page.locator('#play-video-button').click()</div>
+          </div>
+          <!-- Step 3 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 3</span>
+              <span class="badge badge-success">2.6s</span>
+            </div>
+            <div class="step-name">Locate caption toggle button</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test2-step3.png', 'Step 3: Locate caption toggle button')">
+              <img src="assets/test2-step3.png" alt="Step 3" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(page.locator('#caption-toggle-button')).toBeVisible()</div>
+          </div>
+          <!-- Step 4 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 4</span>
+              <span class="badge badge-success">3.4s</span>
+            </div>
+            <div class="step-name">Click caption toggle button to activate subtitles</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test2-step4.png', 'Step 4: Click caption toggle button')">
+              <img src="assets/test2-step4.png" alt="Step 4" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">await captionToggleButton.click() &bull; aria-pressed="true"</div>
+          </div>
+          <!-- Step 5 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 5</span>
+              <span class="badge badge-success">5.7s</span>
+            </div>
+            <div class="step-name">Subtitles fetched and rendered in viewer</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test2-step5.png', 'Step 5: Subtitles fetched and rendered')">
+              <img src="assets/test2-step5.png" alt="Step 5" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(page.locator('#subtitle-cue-row-0')).toBeVisible()</div>
+          </div>
+          <!-- Step 6 -->
+          <div class="step-card">
+            <div class="step-card-header">
+              <span class="step-tag">STEP 6</span>
+              <span class="badge badge-success">7.4s</span>
+            </div>
+            <div class="step-name">Verify subtitle dialogue text is non-empty</div>
+            <div class="step-img-wrap" onclick="openLightbox('assets/test2-step6.png', 'Step 6: Verify subtitle dialogue text')">
+              <img src="assets/test2-step6.png" alt="Step 6" loading="lazy">
+              <div class="step-zoom-overlay"><span>🔍 Click to Enlarge</span></div>
+            </div>
+            <div class="step-code-footer">expect(subtitleText.length).toBeGreaterThan(3)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIGHTBOX MODAL -->
+    <div id="lightbox" class="lightbox-modal" onclick="closeLightbox(event)">
+      <div class="lightbox-close" onclick="closeLightbox(event)">&times;</div>
+      <img id="lightbox-img" class="lightbox-content" src="" alt="Enlarged Step">
+      <div id="lightbox-caption" class="lightbox-caption"></div>
+    </div>
+
+    <footer>
+      <div>YouTube Video Viewer &bull; E2E Test Suite Automation</div>
+      <div>Hosted on GitHub Pages (<code>gh-pages</code>)</div>
+    </footer>
+  </div>
+
+  <script>
+    function switchTab(testId, view, btn) {
+      const parent = document.getElementById(testId === 't1' ? 'test-1' : 'test-2');
+      const tabs = parent.querySelectorAll('.tab-btn');
+      tabs.forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+
+      const videoPanel = document.getElementById(testId + '-video');
+      const stepsPanel = document.getElementById(testId + '-steps');
+
+      if (view === 'video') {
+        videoPanel.style.display = 'grid';
+        stepsPanel.style.display = 'none';
+      } else {
+        videoPanel.style.display = 'none';
+        stepsPanel.style.display = 'flex';
+      }
+    }
+
+    function openLightbox(src, caption) {
+      const modal = document.getElementById('lightbox');
+      const img = document.getElementById('lightbox-img');
+      const cap = document.getElementById('lightbox-caption');
+      img.src = src;
+      cap.textContent = caption;
+      modal.classList.add('open');
+    }
+
+    function closeLightbox(e) {
+      if (e.target.id === 'lightbox' || e.target.classList.contains('lightbox-close')) {
+        document.getElementById('lightbox').classList.remove('open');
+      }
+    }
+  </script>
+</body>
+</html>

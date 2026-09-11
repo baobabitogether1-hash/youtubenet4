@@ -3,9 +3,11 @@ import { CaptionCue, TargetLanguage, SyncPlayOrder, YouTubePlayerHandle } from '
 import { speakText, stopTTS, isTTSSpeaking, getTTSEngineType } from '../lib/ttsEngine';
 import {
   translateText,
+  translateOnDemandCues,
   prefetchCueTranslations,
-  translateTrackWithNativeFirst,
+  ON_DEMAND_FALLBACK_COUNT,
 } from '../lib/translateService';
+import { logSync, logTTS } from '../utils/logBuffer';
 
 interface UseSyncEngineProps {
   cues: CaptionCue[];
@@ -15,6 +17,7 @@ interface UseSyncEngineProps {
   playOrder: SyncPlayOrder;
   observedUrl?: string | null;
   videoId?: string;
+  externalTranslations?: Record<string, Record<string, string>>;
 }
 
 export function useSyncEngine({
@@ -25,6 +28,7 @@ export function useSyncEngine({
   playOrder,
   observedUrl,
   videoId,
+  externalTranslations,
 }: UseSyncEngineProps) {
   const [activeCueIndex, setActiveCueIndex] = useState<number>(-1);
   const [isSyncActive, setIsSyncActive] = useState<boolean>(false);
@@ -38,6 +42,9 @@ export function useSyncEngine({
   const translationsRef = useRef(translations);
   translationsRef.current = translations;
 
+  const externalTranslationsRef = useRef(externalTranslations);
+  externalTranslationsRef.current = externalTranslations;
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -46,33 +53,58 @@ export function useSyncEngine({
     };
   }, []);
 
-  // Prepopulate translations using YouTube Native timedtext translation by default (fallback to GTX)
+  // Step 2.3 & 4.4: On-demand fallback translation for next X=4 records ONLY when playback reaches a cue
   useEffect(() => {
-    if (!cues || cues.length === 0) return;
+    if (!cues || cues.length === 0 || activeCueIndex < 0) return;
     const enabledLangs = languages.filter((l) => l.enabled);
     enabledLangs.forEach(async (lang) => {
       try {
-        const result = await translateTrackWithNativeFirst({
-          originalCues: cues,
-          targetLang: lang.code,
-          observedUrl,
-          videoId,
-          sourceLang,
+        // Collect existing valid translations so we never overwrite them
+        const existingLangTrans: Record<string, string> = {};
+        cues.forEach((c) => {
+          const fromCurrent = translationsRef.current[c.id]?.[lang.code];
+          const fromExt = externalTranslationsRef.current?.[c.id]?.[lang.code];
+          if (fromCurrent && fromCurrent.trim().toLowerCase() !== c.text.trim().toLowerCase()) {
+            existingLangTrans[c.id] = fromCurrent;
+          } else if (fromExt && fromExt.trim().toLowerCase() !== c.text.trim().toLowerCase()) {
+            existingLangTrans[c.id] = fromExt;
+          }
         });
-        if (result.translations) {
+
+        const nextTranslations = await translateOnDemandCues({
+          cues,
+          startIndex: activeCueIndex,
+          count: ON_DEMAND_FALLBACK_COUNT,
+          targetLang: lang.code,
+          sourceLang,
+          existingTranslations: existingLangTrans,
+        });
+
+        if (nextTranslations && Object.keys(nextTranslations).length > 0) {
           setTranslations((prev) => {
             const updated = { ...prev };
-            Object.entries(result.translations).forEach(([cId, text]) => {
-              updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+            let changed = false;
+            Object.entries(nextTranslations).forEach(([cId, text]) => {
+              const cue = cues.find((c) => c.id === cId);
+              const isOrig = cue && text.trim().toLowerCase() === cue.text.trim().toLowerCase();
+              // CRITICAL: NEVER overwrite with the original sentence or blank string!
+              if (text && (!isOrig || lang.code === sourceLang)) {
+                const currentVal = updated[cId]?.[lang.code];
+                const currentIsOrig = cue && currentVal && currentVal.trim().toLowerCase() === cue.text.trim().toLowerCase();
+                if (!currentVal || currentIsOrig) {
+                  updated[cId] = { ...(updated[cId] || {}), [lang.code]: text };
+                  changed = true;
+                }
+              }
             });
-            return updated;
+            return changed ? updated : prev;
           });
         }
       } catch (err) {
-        console.warn(`[SyncEngine] Pre-translation error for ${lang.code}:`, err);
+        console.warn(`[SyncEngine] On-demand translation error for ${lang.code}:`, err);
       }
     });
-  }, [cues, languages, observedUrl, videoId, sourceLang]);
+  }, [activeCueIndex, cues, languages, sourceLang]);
 
   /**
    * Helper to retrieve or fetch translation for a cue
@@ -80,18 +112,26 @@ export function useSyncEngine({
   const getCueTranslation = useCallback(
     async (cue: CaptionCue, targetLangCode: string): Promise<string> => {
       const cueId = cue.id;
-      if (translationsRef.current[cueId]?.[targetLangCode]) {
-        return translationsRef.current[cueId][targetLangCode];
+      const fromRef = translationsRef.current[cueId]?.[targetLangCode];
+      if (fromRef && fromRef.trim().toLowerCase() !== cue.text.trim().toLowerCase()) {
+        return fromRef;
+      }
+      const fromExt = externalTranslationsRef.current?.[cueId]?.[targetLangCode];
+      if (fromExt && fromExt.trim().toLowerCase() !== cue.text.trim().toLowerCase()) {
+        return fromExt;
       }
 
       const translated = await translateText(cue.text, sourceLang, targetLangCode);
-      setTranslations((prev) => ({
-        ...prev,
-        [cueId]: {
-          ...(prev[cueId] || {}),
-          [targetLangCode]: translated,
-        },
-      }));
+      const isOrig = translated.trim().toLowerCase() === cue.text.trim().toLowerCase();
+      if (translated && (!isOrig || targetLangCode === sourceLang)) {
+        setTranslations((prev) => ({
+          ...prev,
+          [cueId]: {
+            ...(prev[cueId] || {}),
+            [targetLangCode]: translated,
+          },
+        }));
+      }
       return translated;
     },
     [sourceLang]
@@ -99,14 +139,23 @@ export function useSyncEngine({
 
   /**
    * Plays TTS for all enabled languages for a given cue in the exact configured sequence
+   * Enforces strict mutual exclusion: YouTube video MUST remain paused while TTS speaks
    */
   const playCueTTSSequence = useCallback(
     async (cue: CaptionCue, enabledLangs: TargetLanguage[]): Promise<boolean> => {
+      // RULE: Never play both tts-play and youtube playback together!
+      playerRef.current?.pause();
+      await new Promise((r) => setTimeout(r, 120));
+
       for (const lang of enabledLangs) {
         if (abortRef.current) return false;
 
         const textToSpeak = await getCueTranslation(cue, lang.code);
         if (abortRef.current) return false;
+        if (!textToSpeak) continue;
+
+        // Firmly ensure video player is paused before speaking each language
+        playerRef.current?.pause();
 
         setCurrentTTSLang(lang.code);
         setCurrentTTSText(textToSpeak);
@@ -119,6 +168,7 @@ export function useSyncEngine({
         }
 
         if (abortRef.current) {
+          stopTTS();
           setIsSpeaking(false);
           setCurrentTTSLang(null);
           setCurrentTTSText(null);
@@ -129,20 +179,28 @@ export function useSyncEngine({
         await new Promise((r) => setTimeout(r, 220));
       }
 
+      stopTTS();
       setIsSpeaking(false);
       setCurrentTTSLang(null);
       setCurrentTTSText(null);
       return true;
     },
-    [getCueTranslation]
+    [getCueTranslation, playerRef]
   );
 
   /**
    * Waits until YouTube video plays the duration of the current cue
+   * Enforces strict mutual exclusion: TTS MUST be completely silenced before video plays
    */
   const playVideoCueSegment = useCallback(
     (cue: CaptionCue): Promise<void> => {
       return new Promise((resolve) => {
+        // RULE: Never play both tts-play and youtube playback together!
+        stopTTS();
+        setIsSpeaking(false);
+        setCurrentTTSLang(null);
+        setCurrentTTSText(null);
+
         const player = playerRef.current;
         if (!player) {
           resolve();
@@ -161,6 +219,7 @@ export function useSyncEngine({
         const checkInterval = setInterval(() => {
           if (abortRef.current) {
             clearInterval(checkInterval);
+            player.pause();
             resolve();
             return;
           }
@@ -186,14 +245,17 @@ export function useSyncEngine({
 
   /**
    * Master execution loop
+   * Strictly enforces sequential playOrder ('video_first' vs 'tts_first')
+   * and guarantees TTS and YouTube playback NEVER play simultaneously.
    */
   const startSync = useCallback(
     async (startIndex?: number) => {
       if (!cues || cues.length === 0) return;
 
-      // Abort any existing loop first
+      // Abort any existing loop, stop TTS and pause video
       abortRef.current = true;
       stopTTS();
+      playerRef.current?.pause();
       await new Promise((r) => setTimeout(r, 120));
 
       abortRef.current = false;
@@ -208,6 +270,7 @@ export function useSyncEngine({
       while (idx < cues.length && !abortRef.current) {
         const cue = cues[idx];
         setActiveCueIndex(idx);
+        logSync('SyncLoop', `Block ${idx + 1}/${cues.length} [${playOrder}] starting: "${cue.text.substring(0, 35)}..."`);
 
         // Background prefetch translations for upcoming cues
         if (enabledLangs.length > 0) {
@@ -217,27 +280,49 @@ export function useSyncEngine({
         }
 
         if (playOrder === 'video_first') {
-          // 1. Play video segment
+          // 1. Play video segment (TTS is silent)
+          logSync('SyncLoop', `[Block ${idx + 1}] Step 1: Playing video segment (${cue.start.toFixed(1)}s - ${(cue.start + cue.duration).toFixed(1)}s)`);
           await playVideoCueSegment(cue);
           if (abortRef.current) break;
 
-          // 2. Pause video and TTS-play translations in sequence
+          // Firmly ensure video is paused and wait a brief moment before TTS
+          playerRef.current?.pause();
+          await new Promise((r) => setTimeout(r, 150));
+          if (abortRef.current) break;
+
+          // 2. TTS-play translations in sequence (Video is paused)
           if (enabledLangs.length > 0) {
+            logSync('SyncLoop', `[Block ${idx + 1}] Step 2: Playing sequential TTS translations`);
             const completed = await playCueTTSSequence(cue, enabledLangs);
             if (!completed || abortRef.current) break;
           }
         } else {
-          // 1. TTS first: translate and narrate
+          // 1. TTS first: translate and narrate (Video MUST remain paused)
+          logSync('SyncLoop', `[Block ${idx + 1}] Step 1: Playing sequential TTS translations (Video paused)`);
+          playerRef.current?.pause();
+          await new Promise((r) => setTimeout(r, 120));
+          if (abortRef.current) break;
+
           if (enabledLangs.length > 0) {
             const completed = await playCueTTSSequence(cue, enabledLangs);
             if (!completed || abortRef.current) break;
           }
 
-          // 2. Play video segment
+          // Firmly ensure TTS is stopped and wait before starting video
+          stopTTS();
+          await new Promise((r) => setTimeout(r, 150));
+          if (abortRef.current) break;
+
+          // 2. Play video segment (TTS is silent)
+          logSync('SyncLoop', `[Block ${idx + 1}] Step 2: Playing video segment (${cue.start.toFixed(1)}s - ${(cue.start + cue.duration).toFixed(1)}s)`);
           await playVideoCueSegment(cue);
           if (abortRef.current) break;
+
+          // Firmly pause video after segment completes
+          playerRef.current?.pause();
         }
 
+        logSync('SyncLoop', `[Block ${idx + 1}] Finished block cleanly. Transitioning to next...`);
         // Small inter-cue delay
         await new Promise((r) => setTimeout(r, 200));
         idx++;
@@ -245,15 +330,17 @@ export function useSyncEngine({
 
       isLoopRunningRef.current = false;
       setIsSyncActive(false);
+      stopTTS();
       setIsSpeaking(false);
       setCurrentTTSLang(null);
       setCurrentTTSText(null);
+      playerRef.current?.pause();
     },
-    [cues, activeCueIndex, languages, playOrder, playVideoCueSegment, playCueTTSSequence, sourceLang]
+    [cues, activeCueIndex, languages, playOrder, playVideoCueSegment, playCueTTSSequence, sourceLang, playerRef]
   );
 
   /**
-   * Pauses the sync loop and active TTS
+   * Pauses the sync loop, stops TTS and firmly pauses video
    */
   const pauseSync = useCallback(() => {
     abortRef.current = true;
@@ -277,7 +364,10 @@ export function useSyncEngine({
         startSync(index);
       } else {
         const cue = cues[index];
+        stopTTS();
+        playerRef.current?.pause();
         playerRef.current?.seekTo(cue.start);
+        playerRef.current?.pause();
       }
     },
     [cues, isSyncActive, startSync, playerRef]
@@ -294,25 +384,40 @@ export function useSyncEngine({
   }, [activeCueIndex, jumpToCue]);
 
   /**
-   * Test-play TTS for a single target language without launching the whole video loop
+   * Test-play TTS for a single target language without launching the video loop
+   * Firmly pauses video first
    */
   const testSpeakLang = useCallback(
     async (cue: CaptionCue, lang: TargetLanguage) => {
       stopTTS();
+      playerRef.current?.pause();
+      await new Promise((r) => setTimeout(r, 120));
+
       const textToSpeak = await getCueTranslation(cue, lang.code);
+      if (!textToSpeak) return;
+
+      playerRef.current?.pause();
       setCurrentTTSLang(lang.code);
       setCurrentTTSText(textToSpeak);
       setIsSpeaking(true);
       try {
         await speakText(textToSpeak, lang.code, lang.ttsRate, lang.voice);
       } finally {
+        stopTTS();
         setIsSpeaking(false);
         setCurrentTTSLang(null);
         setCurrentTTSText(null);
       }
     },
-    [getCueTranslation]
+    [getCueTranslation, playerRef]
   );
+
+  // Active mutual exclusion watchdog: whenever speaking is active, keep video paused
+  useEffect(() => {
+    if (isSpeaking) {
+      playerRef.current?.pause();
+    }
+  }, [isSpeaking, playerRef]);
 
   return {
     activeCueIndex,

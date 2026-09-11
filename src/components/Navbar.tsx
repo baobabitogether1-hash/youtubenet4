@@ -1,23 +1,52 @@
-import React from 'react';
-import { Youtube, Subtitles, Share2, Activity, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Youtube, Subtitles, Share2, Activity, AlertTriangle, Settings, Terminal, Copy, Check } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setNetworkInspectorOpen } from '../store/networkSlice';
 import { setInspectorOpen } from '../store/errorsSlice';
+import { logBuffer } from '../utils/logBuffer';
+import { AppSettings } from '../utils/appSettings';
 
 interface NavbarProps {
   onOpenLibrary?: () => void;
   libraryCount?: number;
   onOpenShare?: () => void;
+  onOpenSettings?: () => void;
+  onOpenLogs?: () => void;
+  settings?: AppSettings;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenLibrary,
   libraryCount,
   onOpenShare,
+  onOpenSettings,
+  onOpenLogs,
+  settings,
 }) => {
   const dispatch = useAppDispatch();
   const { requests } = useAppSelector((state) => state.network);
   const { errors } = useAppSelector((state) => state.errors);
+  const [logCount, setLogCount] = useState(() => logBuffer.getEntries().length);
+  const [copiedLogs, setCopiedLogs] = useState(false);
+
+  useEffect(() => {
+    const unsub = logBuffer.subscribe(() => {
+      setLogCount(logBuffer.getEntries().length);
+    });
+    return unsub;
+  }, []);
+
+  const handleQuickCopyLogs = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(logBuffer.copyAll());
+      setCopiedLogs(true);
+      setTimeout(() => setCopiedLogs(false), 2000);
+    } catch {
+      setCopiedLogs(true);
+      setTimeout(() => setCopiedLogs(false), 2000);
+    }
+  };
 
   return (
     <header className="border-b border-neutral-800/80 bg-neutral-900/60 backdrop-blur-md sticky top-0 z-40">
@@ -37,49 +66,100 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right side: inspectors, share link & library info */}
+        {/* Right side: logs, settings, inspectors, share link & library info */}
         <div className="flex items-center gap-2">
-          {/* Always accessible Network Inspector */}
-          <button
-            type="button"
-            id="navbar-network-inspector-button"
-            data-testid="navbar-network-inspector-button"
-            onClick={() => dispatch(setNetworkInspectorOpen(true))}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-800/60 bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 text-xs font-medium transition active:scale-95"
-            title="Inspect web requests & responses"
-          >
-            <Activity className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden sm:inline">Network</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-blue-900/80 text-[10px] font-mono font-bold text-blue-200">
-              {requests.length}
-            </span>
-          </button>
+          {/* Activity Logs Button with Copy All Option */}
+          {onOpenLogs && (
+            <div className="flex items-center rounded-lg border border-neutral-700 bg-neutral-800/80 overflow-hidden">
+              <button
+                type="button"
+                id="navbar-logs-button"
+                data-testid="navbar-logs-button"
+                onClick={onOpenLogs}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-neutral-700 text-neutral-200 text-xs font-medium transition active:scale-95"
+                title="View Activity Logs & Ring Buffer"
+              >
+                <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">Logs</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-neutral-900 text-[10px] font-mono font-bold text-neutral-300">
+                  {logCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                id="navbar-copy-logs-button"
+                data-testid="navbar-copy-logs-button"
+                onClick={handleQuickCopyLogs}
+                className={`p-1.5 border-l border-neutral-700 hover:bg-neutral-700 transition ${
+                  copiedLogs ? 'text-emerald-400 bg-emerald-950/60' : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+                title="Copy All Logs to Clipboard"
+              >
+                {copiedLogs ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          )}
 
-          {/* Always accessible Errors Inspector */}
-          <button
-            type="button"
-            id="navbar-error-inspector-button"
-            data-testid="navbar-error-inspector-button"
-            onClick={() => dispatch(setInspectorOpen(true))}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition active:scale-95 ${
-              errors.length > 0
-                ? 'border-red-700/80 bg-red-950/60 hover:bg-red-900/80 text-red-300 animate-pulse'
-                : 'border-neutral-700 bg-neutral-800/80 hover:bg-neutral-800 text-neutral-300'
-            }`}
-            title="Inspect app errors & Redux state machine"
-          >
-            <AlertTriangle
-              className={`w-3.5 h-3.5 ${errors.length > 0 ? 'text-red-400' : 'text-neutral-400'}`}
-            />
-            <span className="hidden sm:inline">Errors</span>
-            <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                errors.length > 0 ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'
-              }`}
+          {/* Settings Button */}
+          {onOpenSettings && (
+            <button
+              type="button"
+              id="navbar-settings-button"
+              data-testid="navbar-settings-button"
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 text-xs font-medium transition active:scale-95"
+              title="Open Settings"
             >
-              {errors.length}
-            </span>
-          </button>
+              <Settings className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+          )}
+
+          {/* Network Inspector (if enabled in settings or active) */}
+          {(settings?.enableNetworkInspector ?? false) && (
+            <button
+              type="button"
+              id="navbar-network-inspector-button"
+              data-testid="navbar-network-inspector-button"
+              onClick={() => dispatch(setNetworkInspectorOpen(true))}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-800/60 bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 text-xs font-medium transition active:scale-95"
+              title="Inspect web requests & responses"
+            >
+              <Activity className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">Network</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-blue-900/80 text-[10px] font-mono font-bold text-blue-200">
+                {requests.length}
+              </span>
+            </button>
+          )}
+
+          {/* Errors Inspector (shown if errors exist or if enabled in settings) */}
+          {(errors.length > 0 || (settings?.enableErrorInspector ?? false)) && (
+            <button
+              type="button"
+              id="navbar-error-inspector-button"
+              data-testid="navbar-error-inspector-button"
+              onClick={() => dispatch(setInspectorOpen(true))}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition active:scale-95 ${
+                errors.length > 0
+                  ? 'border-red-700/80 bg-red-950/60 hover:bg-red-900/80 text-red-300 animate-pulse'
+                  : 'border-neutral-700 bg-neutral-800/80 hover:bg-neutral-800 text-neutral-300'
+              }`}
+              title="Inspect app errors & Redux state machine"
+            >
+              <AlertTriangle
+                className={`w-3.5 h-3.5 ${errors.length > 0 ? 'text-red-400' : 'text-neutral-400'}`}
+              />
+              <span className="hidden sm:inline">Errors</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  errors.length > 0 ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'
+                }`}
+              >
+                {errors.length}
+              </span>
+            </button>
+          )}
 
           {onOpenShare && (
             <button

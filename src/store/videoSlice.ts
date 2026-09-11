@@ -23,11 +23,7 @@ const initialState: VideoSliceState = {
   recentUpdates: [],
 };
 
-// Loop Detection Limits
-const LOOP_WINDOW_MS = 2000;
-const MAX_UPDATES_IN_WINDOW = 6;
-const IDENTICAL_UPDATE_DEBOUNCE_MS = 300;
-
+// Redux Video Slice
 export const videoSlice = createSlice({
   name: 'video',
   initialState,
@@ -42,49 +38,32 @@ export const videoSlice = createSlice({
         source?: string;
       }>
     ) => {
-      const now = Date.now();
       const { videoId, url, startTime, formatType, source } = action.payload;
 
-      // Filter recent updates within the sliding time window
-      const recent = state.recentUpdates.filter((u) => now - u.timestamp < LOOP_WINDOW_MS);
-
-      // Check 1: Identical consecutive update within 300ms
-      const lastUpdate = state.recentUpdates[0];
-      const isIdenticalRapid =
-        lastUpdate &&
-        lastUpdate.videoId === videoId &&
-        lastUpdate.startTime === startTime &&
-        now - lastUpdate.timestamp < IDENTICAL_UPDATE_DEBOUNCE_MS;
-
-      // Check 2: Exceeded frequency limit (> 6 updates in 2s)
-      const isFrequencyOverload = recent.length >= MAX_UPDATES_IN_WINDOW;
-
-      if (isIdenticalRapid || isFrequencyOverload) {
-        state.isLoopBlocked = true;
-        state.loopProtectionBlockedCount += 1;
-        state.loopWarning = isFrequencyOverload
-          ? `Loop Guard: Blocked video update loop (${recent.length + 1} requests within 2s) for video ${videoId}.`
-          : `Loop Guard: Debounced duplicate video update within ${now - lastUpdate.timestamp}ms for video ${videoId}.`;
-
-        console.warn(`[Redux Video Loop Guard] ${state.loopWarning}`, action.payload);
+      // Proper idempotent logic: if video is already active with identical params, do nothing
+      if (
+        state.videoId === videoId &&
+        state.currentUrl === url &&
+        state.startTime === startTime &&
+        (!formatType || state.detectedFormat === formatType)
+      ) {
         return;
       }
 
-      // Safe update
       state.videoId = videoId;
       state.currentUrl = url;
       state.startTime = startTime;
       if (formatType) state.detectedFormat = formatType;
       state.updateCount += 1;
-      state.lastUpdateTimestamp = now;
+      state.lastUpdateTimestamp = Date.now();
       state.isLoopBlocked = false;
       state.loopWarning = null;
 
-      // Track in recent updates (cap at 20)
+      // Track in recent updates for history & diagnostic auditing (cap at 20)
       state.recentUpdates.unshift({
         videoId,
         startTime,
-        timestamp: now,
+        timestamp: Date.now(),
         source: source || 'app',
       });
       if (state.recentUpdates.length > 20) {

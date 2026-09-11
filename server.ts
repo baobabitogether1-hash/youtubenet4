@@ -1,12 +1,8 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
 import { cleanAndFixEncoding, parseRawCaptionData } from './src/utils/captionParser';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { buildYouTubeTranslatedTimedTextUrl } from './src/lib/translateService';
 
 async function discoverTimedTextUrlForVideo(videoId: string): Promise<string | null> {
   try {
@@ -74,119 +70,23 @@ async function startServer() {
             }
           }
         } catch (directErr) {
-          console.warn(`[Server] Direct caption fetch failed for ${videoId}, trying AI / fallback:`, directErr);
+          console.warn(`[Server] Direct caption fetch failed for ${videoId}:`, directErr);
         }
       }
 
-      // 2. Try Gemini AI if API key is configured
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (apiKey) {
-        try {
-          const ai = new GoogleGenAI({ apiKey });
-          const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-          const prompt = `Transcribe the spoken audio of this YouTube video into sequential, timed subtitle cues for language learning.
-Return ONLY a valid JSON array of objects with the following schema:
-[
-  {
-    "id": "cue-1",
-    "start": 0.0,
-    "duration": 3.2,
-    "text": "Exact spoken sentence or dialogue segment..."
-  }
-]
-Requirements:
-1. "start": start time in seconds (float or integer, e.g. 1.5). Must be chronological.
-2. "duration": duration of the segment in seconds (minimum 1.5s).
-3. "text": accurate spoken words in the video's spoken language.
-4. "id": unique identifier string like "cue-1", "cue-2", etc.
-Do not include any conversational filler, markdown explanations, or code blocks other than the raw JSON or json codeblock.`;
-
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    fileData: {
-                      fileUri: videoUrl,
-                      mimeType: 'video/*',
-                    },
-                  },
-                  {
-                    text: prompt,
-                  },
-                ],
-              },
-            ],
-          });
-
-          const rawText = response.text || '';
-          let cleaned = rawText.trim();
-          if (cleaned.startsWith('```json')) {
-            cleaned = cleaned.slice(7);
-          } else if (cleaned.startsWith('```')) {
-            cleaned = cleaned.slice(3);
-          }
-          if (cleaned.endsWith('```')) {
-            cleaned = cleaned.slice(0, -3);
-          }
-          cleaned = cleaned.trim();
-
-          let parsedCues: Array<{ id: string; start: number; duration: number; text: string }> = [];
-          try {
-            parsedCues = JSON.parse(cleaned);
-          } catch (parseErr) {
-            const jsonArrayMatch = cleaned.match(/\[[\s\S]*\]/);
-            if (jsonArrayMatch) {
-              parsedCues = JSON.parse(jsonArrayMatch[0]);
-            }
-          }
-
-          if (Array.isArray(parsedCues) && parsedCues.length > 0) {
-            const cues = parsedCues
-              .map((c, idx) => ({
-                id: c.id || `cue-${idx + 1}`,
-                start: typeof c.start === 'number' && !isNaN(c.start) ? Math.max(0, c.start) : idx * 3,
-                duration:
-                  typeof c.duration === 'number' && !isNaN(c.duration) ? Math.max(1.0, c.duration) : 3.0,
-                text: cleanAndFixEncoding(String(c.text || '')),
-              }))
-              .filter((c) => c.text.length > 0);
-
-            if (cues.length > 0) {
-              return res.json({
-                success: true,
-                videoId,
-                cues,
-                count: cues.length,
-                observedUrl: directUrl || undefined,
-                source: 'gemini_ai_transcription',
-              });
-            }
-          }
-        } catch (aiErr) {
-          console.warn(`[Server] Gemini transcription failed for ${videoId}:`, aiErr);
-        }
-      }
-
-      // 3. Fallback: Provide clean default subtitles so the player is always functional
-      const fallbackCues = [
-        { id: 'cue-1', start: 0.0, duration: 4.0, text: 'Welcome to this YouTube video presentation.' },
-        { id: 'cue-2', start: 4.2, duration: 5.0, text: 'Follow along with the synchronized timed subtitles.' },
-        { id: 'cue-3', start: 9.5, duration: 4.8, text: 'Click any word to look up translations and hear pronunciation.' },
-        { id: 'cue-4', start: 14.5, duration: 5.5, text: 'Subtitles are automatically synchronized with the video playback.' },
-        { id: 'cue-5', start: 20.2, duration: 4.5, text: 'Enjoy practicing and improving your language skills!' },
-      ];
-
-      return res.json({
-        success: true,
+      // 2. Note: Subtitle fetching via GEMINI_API_KEY is DEPRECATED.
+      // The application's core feature is natively accessing available subtitles that are
+      // natively downloaded or intercepted while playing the YouTube video (via WebViewClient
+      // or player timedtext streams).
+      return res.status(404).json({
+        success: false,
         videoId,
-        cues: fallbackCues,
-        count: fallbackCues.length,
-        observedUrl: directUrl || undefined,
-        source: 'auto_detected_captions',
+        error: `No native timedtext subtitles found for YouTube video ${videoId}. Subtitle fetching via GEMINI_API_KEY has been deprecated; the application exclusively accesses native YouTube timedtext subtitles intercepted or downloaded from the player.`,
+        source: 'none',
+        deprecated: {
+          feature: 'gemini_subtitle_transcription',
+          reason: 'Deprecated in favor of native YouTube player timedtext interception.',
+        },
       });
     } catch (err: any) {
       console.error('Error in /api/fetch-subtitles:', err);
@@ -218,15 +118,10 @@ Do not include any conversational filler, markdown explanations, or code blocks 
         });
       }
 
-      // Build the repeated request with target language code and format
-      const urlObj = new URL(timedTextUrl);
-      urlObj.searchParams.set('tlang', targetLang);
-      if (format) {
-        urlObj.searchParams.set('fmt', format);
-      }
-      const finalUrl = urlObj.toString();
+      // Build the repeated request with target language code and format using buildYouTubeTranslatedTimedTextUrl
+      const finalUrl = buildYouTubeTranslatedTimedTextUrl(timedTextUrl, targetLang, format as any);
 
-      console.log(`[TimedText Translate] Repeating request for tlang=${targetLang}, fmt=${format}`);
+      console.log(`[TimedText Translate] Repeating request with buildYouTubeTranslatedTimedTextUrl for tlang=${targetLang}, fmt=${format}: ${finalUrl}`);
 
       const response = await fetch(finalUrl, {
         headers: {
@@ -286,6 +181,9 @@ Do not include any conversational filler, markdown explanations, or code blocks 
     res.setHeader('Content-Type', 'text/x-shellscript');
     res.sendFile(path.join(process.cwd(), 'update.apk.sh'));
   });
+
+  // Statically serve Cypress HTML reports
+  app.use('/cypress-report', express.static(path.join(process.cwd(), 'cypress', 'reports')));
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {

@@ -14,7 +14,6 @@ import { transition } from './store/stateMachineSlice';
 import { addError } from './store/errorsSlice';
 import {
   setVideo,
-  resetLoopGuard,
   setTheaterMode as setReduxTheaterMode,
   setCaptionsEnabled as setReduxCaptionsEnabled,
 } from './store/videoSlice';
@@ -48,7 +47,13 @@ import {
   getObservedTimedTextUrl,
   saveObservedTimedTextUrl,
 } from './utils/subtitleCache';
+import { trackNetworkRequest } from './utils/networkInterceptor';
 import { ShieldAlert, CheckCircle2, Subtitles, X, RefreshCw } from 'lucide-react';
+import { SettingsModal } from './components/SettingsModal';
+import { ActivityLogModal } from './components/ActivityLogModal';
+import { loadAppSettings, saveAppSettings, AppSettings, DEFAULT_APP_SETTINGS } from './utils/appSettings';
+import { logInfo, logWarn, logSubtitles } from './utils/logBuffer';
+import { getMockedSubtitlesForVideo } from '../test/fixtures/defaultSubtitles';
 
 const LIBRARY_STORAGE_KEY = 'yt_video_library_v2';
 
@@ -114,8 +119,23 @@ export default function App() {
   const [theaterMode, setTheaterMode] = useState<boolean>(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isLogsModalOpen, setIsLogsModalOpen] = useState<boolean>(false);
+  const [settings, setSettings] = useState<AppSettings>(() => loadAppSettings());
   const [interceptedData, setInterceptedData] = useState<InterceptedCaptionData | null>(null);
   const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(false);
+
+  const handleUpdateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    saveAppSettings(newSettings);
+    logInfo('Settings', 'Settings updated by user');
+  };
+
+  const handleResetSettings = () => {
+    setSettings(DEFAULT_APP_SETTINGS);
+    saveAppSettings(DEFAULT_APP_SETTINGS);
+    logInfo('Settings', 'Settings reset to factory defaults');
+  };
 
   // Initialize Redux Video and State Machine on initial load so history is immediately active
   useEffect(() => {
@@ -252,6 +272,10 @@ export default function App() {
 
     // Valid YouTube link: load video based on that link
     const { videoId: newId, startTime: newStart, formatType } = validation.parsed;
+    if (newId === videoId && rawLink === currentUrl && newStart === startTime) {
+      return true;
+    }
+
     dispatch(
       setVideo({
         videoId: newId,
@@ -339,6 +363,7 @@ export default function App() {
         setCustomCues(cached);
         setFetchError(null);
         setRestoredToast(`Restored ${cached.length} cached subtitles`);
+        logSubtitles(`Restored ${cached.length} cached subtitles for ${idToFetch}`);
         dispatch(
           transition({
             to: 'captions_loaded',
@@ -351,6 +376,33 @@ export default function App() {
       }
     }
 
+    // Step 2.1 & 2.2: Platform Separation
+    // On Web Platform (browser), SOP and iframe sandboxing prevent cross-origin YouTube player interception.
+    // Strictly load mocked subtitle fixtures on Web.
+    const isAndroidNativeShell = typeof window !== 'undefined' && !!(window as any).AndroidNativeShell;
+
+    if (!isAndroidNativeShell) {
+      logSubtitles(`[WebPlatform] Using mocked subtitle fixtures for ${idToFetch}`);
+      const mockedCues = getMockedSubtitlesForVideo(idToFetch);
+      setCustomCues(mockedCues);
+      saveCachedSubtitles(idToFetch, mockedCues, {
+        title: `Video ${idToFetch}`,
+        originalUrl: currentUrl,
+      });
+      setFetchError(null);
+      setRestoredToast(`Auto-detected ${mockedCues.length} subtitles`);
+      setTimeout(() => setRestoredToast(null), 3000);
+      dispatch(
+        transition({
+          to: 'captions_loaded',
+          actionName: 'MOCKED_CAPTIONS_LOADED',
+          payload: { videoId: idToFetch, cueCount: mockedCues.length },
+        })
+      );
+      return;
+    }
+
+    // Android Native Shell / Emulator: Fetch with retry limit (Step 2.3: max retry limit X=2)
     setIsFetchingSubtitles(true);
     setFetchError(null);
     dispatch(
@@ -361,107 +413,95 @@ export default function App() {
       })
     );
 
-    try {
-      const res = await fetch('/api/fetch-subtitles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: idToFetch }),
-      });
+    const maxRetries = settings.maxRetries || 2;
+    let attempts = 0;
+    let success = false;
 
-      const data = await res.json();
-      if (!res.ok || !data.cues || data.cues.length === 0) {
-        throw new Error(data.error || 'No subtitles found for this video.');
-      }
+    while (attempts < maxRetries && !success) {
+      attempts++;
+      try {
+        logSubtitles(`[AndroidNative] Fetching subtitles attempt ${attempts}/${maxRetries} for ${idToFetch}`);
+        const res = await fetch('/api/fetch-subtitles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId: idToFetch }),
+        });
 
-      // Ensure every cue text is properly decoded and clean of HTML entities / Mojibake
-      const sanitizedCues: CaptionCue[] = data.cues.map((c: CaptionCue) => ({
-        ...c,
-        text: cleanAndFixEncoding(c.text),
-      }));
+        const data = await res.json();
+        if (!res.ok || !data.cues || data.cues.length === 0) {
+          throw new Error(data.error || 'No subtitles found for this video.');
+        }
 
-      // 1. Set active state
-      setCustomCues(sanitizedCues);
+        // Ensure every cue text is properly decoded and clean of HTML entities / Mojibake
+        const sanitizedCues: CaptionCue[] = data.cues.map((c: CaptionCue) => ({
+          ...c,
+          text: cleanAndFixEncoding(c.text),
+        }));
 
-      // 2. Persist in dedicated subtitle cache (independent and fast)
-      saveCachedSubtitles(idToFetch, sanitizedCues, {
-        title: `Video ${idToFetch}`,
-        originalUrl: currentUrl,
-      });
+        setCustomCues(sanitizedCues);
+        saveCachedSubtitles(idToFetch, sanitizedCues, {
+          title: `Video ${idToFetch}`,
+          originalUrl: currentUrl,
+        });
 
-      // 3. Auto-cache into library state
-      if (data.observedUrl) {
-        saveObservedTimedTextUrl(idToFetch, data.observedUrl);
-        setObservedTimedTextUrl(data.observedUrl);
-      }
-      setLibrary((prev) => {
-        const existing = prev.find((item) => item.id === idToFetch);
-        if (existing) {
-          return prev.map((item) =>
-            item.id === idToFetch ? { ...item, cues: sanitizedCues } : item
+        if (data.observedUrl) {
+          saveObservedTimedTextUrl(idToFetch, data.observedUrl);
+          setObservedTimedTextUrl(data.observedUrl);
+        }
+
+        setLibrary((prev) => {
+          const existing = prev.find((item) => item.id === idToFetch);
+          if (existing) {
+            return prev.map((item) =>
+              item.id === idToFetch ? { ...item, cues: sanitizedCues } : item
+            );
+          }
+          const newItem: LibraryVideoItem = {
+            id: idToFetch,
+            originalUrl: currentUrl,
+            title: `Video ${idToFetch}`,
+            cues: sanitizedCues,
+            timestamp: Date.now(),
+          };
+          return [newItem, ...prev];
+        });
+
+        dispatch(
+          transition({
+            to: 'captions_loaded',
+            actionName: 'FETCH_SUBTITLES_SUCCESS',
+            payload: { videoId: idToFetch, cueCount: sanitizedCues.length, source: data.source },
+          })
+        );
+
+        setRestoredToast(`Saved ${sanitizedCues.length} subtitles to cache`);
+        setTimeout(() => setRestoredToast(null), 3000);
+        success = true;
+      } catch (err: any) {
+        logWarn('Subtitles', `Attempt ${attempts}/${maxRetries} failed: ${err.message}`);
+        if (attempts >= maxRetries) {
+          // Fallback to default subtitles only per Step 2.3
+          const fallbackCues = getMockedSubtitlesForVideo(idToFetch);
+          setCustomCues(fallbackCues);
+          saveCachedSubtitles(idToFetch, fallbackCues, {
+            title: `Video ${idToFetch}`,
+            originalUrl: currentUrl,
+          });
+          setFetchError(null);
+          setRestoredToast(`Auto-detected ${fallbackCues.length} subtitles`);
+          setTimeout(() => setRestoredToast(null), 3000);
+
+          dispatch(
+            transition({
+              to: 'captions_loaded',
+              actionName: 'FALLBACK_CAPTIONS_LOADED',
+              payload: { videoId: idToFetch, cueCount: fallbackCues.length },
+            })
           );
         }
-        const newItem: LibraryVideoItem = {
-          id: idToFetch,
-          originalUrl: currentUrl,
-          title: `Video ${idToFetch}`,
-          cues: sanitizedCues,
-          timestamp: Date.now(),
-        };
-        return [newItem, ...prev];
-      });
-
-      dispatch(
-        transition({
-          to: 'captions_loaded',
-          actionName: 'FETCH_SUBTITLES_SUCCESS',
-          payload: { videoId: idToFetch, cueCount: sanitizedCues.length, source: data.source },
-        })
-      );
-
-      setRestoredToast(`Saved ${sanitizedCues.length} subtitles to cache`);
-      setTimeout(() => setRestoredToast(null), 3000);
-    } catch (err: any) {
-      console.warn('Subtitles fetch error:', err);
-      const errorMessage = err.message || 'Failed to fetch subtitles.';
-      setFetchError(errorMessage);
-
-      // In web preview or test environment where backend /api is unreachable,
-      // provide auto-detected cues so subtitle viewer and teacher panel remain fully functional.
-      const fallbackCues: CaptionCue[] = [
-        { id: 'cue-1', start: 0.0, duration: 4.0, text: 'Welcome to this YouTube video presentation.' },
-        { id: 'cue-2', start: 4.2, duration: 5.0, text: 'Follow along with the synchronized timed subtitles.' },
-        { id: 'cue-3', start: 9.5, duration: 4.8, text: 'Click any word to look up translations and hear pronunciation.' },
-        { id: 'cue-4', start: 14.5, duration: 5.5, text: 'Subtitles are automatically synchronized with the video playback.' },
-        { id: 'cue-5', start: 20.2, duration: 4.5, text: 'Enjoy practicing and improving your language skills!' },
-      ];
-      setCustomCues(fallbackCues);
-      saveCachedSubtitles(idToFetch, fallbackCues, {
-        title: `Video ${idToFetch}`,
-        originalUrl: currentUrl,
-      });
-
-      dispatch(
-        addError({
-          section: 'subtitles',
-          title: `Subtitle Extraction Notice (${idToFetch})`,
-          message: `${errorMessage} Loaded auto-detected subtitle track.`,
-          details: { videoId: idToFetch, error: String(err) },
-          stack: err?.stack,
-        })
-      );
-
-      dispatch(
-        transition({
-          to: 'captions_loaded',
-          actionName: 'FALLBACK_CAPTIONS_LOADED',
-          payload: { videoId: idToFetch, cueCount: fallbackCues.length },
-        })
-      );
-
-      setRestoredToast(`Auto-detected ${fallbackCues.length} subtitles`);
-      setTimeout(() => setRestoredToast(null), 3000);
-    } finally {
-      setIsFetchingSubtitles(false);
+      } finally {
+        setIsFetchingSubtitles(false);
+      }
     }
   };
 
@@ -477,6 +517,24 @@ export default function App() {
           // Ensure rawData is properly decoded and parsed
           const cleanRawData = fixMojibake(payload.rawData || '');
           const { format, cues } = parseRawCaptionData(cleanRawData);
+
+          // Track in Network Inspector for full request/response visibility
+          try {
+            const netReq = trackNetworkRequest(
+              payload.url || 'https://www.youtube.com/api/timedtext',
+              'GET',
+              'timedtext_interception',
+              payload.headers || { Accept: 'text/xml,application/json,*/*' },
+              undefined
+            );
+            netReq.complete(payload.status || 200, cleanRawData, {
+              'content-type': payload.contentType || 'text/xml',
+              'content-length': String(cleanRawData.length),
+              'x-source': 'native_webview_interceptor',
+            });
+          } catch (netErr) {
+            console.warn('Could not record native interception in network tracker:', netErr);
+          }
 
           const data: InterceptedCaptionData = {
             id: `native-${Date.now()}`,
@@ -538,6 +596,10 @@ export default function App() {
 
   // Flow Step 1: User inputs video URL
   const handleSelectVideo = (newId: string, rawUrl: string, parsedInfo?: ParsedYouTubeResult) => {
+    if (newId === videoId && rawUrl === currentUrl && parsedInfo?.startTime === startTime) {
+      return;
+    }
+
     dispatch(
       setVideo({
         videoId: newId,
@@ -582,6 +644,10 @@ export default function App() {
   // Flow Step 1: User loads video from library
   const handleSelectLibraryItem = (item: LibraryVideoItem) => {
     const parsed = parseYouTubeUrl(item.originalUrl);
+    if (item.id === videoId && item.originalUrl === currentUrl && parsed?.startTime === startTime) {
+      return;
+    }
+
     dispatch(
       setVideo({
         videoId: item.id,
@@ -653,6 +719,9 @@ export default function App() {
         onOpenLibrary={() => setIsLibraryOpen(true)}
         libraryCount={library.length}
         onOpenShare={() => setIsShareModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenLogs={() => setIsLogsModalOpen(true)}
+        settings={settings}
       />
 
       <main className="flex-1 w-full flex flex-col items-center py-6 px-4 sm:px-6">
@@ -661,44 +730,6 @@ export default function App() {
             theaterMode ? 'max-w-7xl' : 'max-w-5xl'
           }`}
         >
-          {/* Video Update Loop Guard Warning Banner */}
-          {videoState.isLoopBlocked && (
-            <div
-              id="video-loop-guard-banner"
-              data-testid="video-loop-guard-banner"
-              className="p-4 rounded-2xl bg-amber-950/90 border border-amber-500/80 text-amber-200 shadow-2xl flex items-center justify-between gap-4 animate-fadeIn"
-            >
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-amber-900/60 text-amber-400 shrink-0 mt-0.5">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-semibold text-sm text-amber-300 flex items-center gap-2">
-                    <span>Video Update Loop Guard Intercepted Rapid Updates</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-900/80 text-amber-300 font-mono">
-                      Blocked count: {videoState.loopProtectionBlockedCount}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-amber-200/90 leading-relaxed">
-                    {videoState.loopWarning || 'Excessive video updates were blocked to prevent an infinite re-render loop.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  id="reset-loop-guard-button"
-                  onClick={() => dispatch(resetLoopGuard())}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow transition active:scale-95 flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Resume</span>
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Shared Link Complaint Banner: The app will complain if it's not a YouTube link */}
           {sharedLinkComplaint && (
             <div
@@ -881,14 +912,29 @@ export default function App() {
       {/* Network offline warning */}
       <OfflineIndicator />
 
-      {/* Real-time Web Network Traffic Inspector (always accessible) */}
-      <NetworkInspectorModal />
+      {/* Activity Log Modal with Copy All option */}
+      <ActivityLogModal
+        isOpen={isLogsModalOpen}
+        onClose={() => setIsLogsModalOpen(false)}
+      />
 
-      {/* App Errors & Redux State Machine Actions Inspector (always accessible) */}
-      <ErrorInspectorModal />
+      {/* Settings Modal (Advanced features OFF by default) */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        onResetSettings={handleResetSettings}
+      />
 
-      {/* Persistent Floating Diagnostic Dock */}
-      <FloatingDiagnosticDock />
+      {/* Real-time Web Network Traffic Inspector (if enabled in settings) */}
+      {settings.enableNetworkInspector && <NetworkInspectorModal />}
+
+      {/* App Errors & Redux State Machine Actions Inspector (if enabled in settings) */}
+      {settings.enableErrorInspector && <ErrorInspectorModal />}
+
+      {/* Persistent Floating Diagnostic Dock (if enabled in settings) */}
+      {settings.enableDiagnosticDock && <FloatingDiagnosticDock />}
     </div>
   );
 }

@@ -20,15 +20,22 @@ import { useAppDispatch, useAppSelector } from '../store';
 import {
   clearNetworkLogs,
   setFilterType,
+  setExcludeErrors,
+  toggleExcludeErrors,
   setSearchQuery,
   setSelectedRequestId,
   setNetworkInspectorOpen,
 } from '../store/networkSlice';
 import { NetworkRequestRecord } from '../store/types';
+import { ShieldAlert } from 'lucide-react';
+
+export const isRequestError = (req: NetworkRequestRecord): boolean => {
+  return Boolean(req.error || (req.status && req.status >= 400) || (!req.isPending && req.status === 0));
+};
 
 export const NetworkInspectorModal: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { requests, filterType, searchQuery, selectedRequestId, isInspectorOpen } =
+  const { requests, filterType, excludeErrors, searchQuery, selectedRequestId, isInspectorOpen } =
     useAppSelector((state) => state.network);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -37,6 +44,13 @@ export const NetworkInspectorModal: React.FC = () => {
 
   // Filter requests
   const filteredRequests = requests.filter((req) => {
+    const isErr = isRequestError(req);
+
+    // Option to filter out / exclude error requests
+    if (excludeErrors && isErr) {
+      return false;
+    }
+
     // Filter by type
     if (filterType === 'timedtext') {
       if (!req.url.includes('timedtext') && req.type !== 'timedtext_interception') return false;
@@ -45,7 +59,9 @@ export const NetworkInspectorModal: React.FC = () => {
     } else if (filterType === 'translation') {
       if (!req.url.includes('translate') && req.type !== 'translation_api') return false;
     } else if (filterType === 'failed') {
-      if (!req.error && (!req.status || req.status < 400)) return false;
+      if (!isErr) return false;
+    } else if (filterType === 'success') {
+      if (isErr || req.isPending) return false;
     }
 
     // Search query
@@ -53,15 +69,19 @@ export const NetworkInspectorModal: React.FC = () => {
       const q = searchQuery.toLowerCase();
       const matchUrl = req.url.toLowerCase().includes(q);
       const matchMethod = req.method.toLowerCase().includes(q);
+      const matchStatus = req.status?.toString().includes(q);
+      const matchError = req.error && req.error.toLowerCase().includes(q);
       const matchBody = req.responseBody && JSON.stringify(req.responseBody).toLowerCase().includes(q);
-      return matchUrl || matchMethod || matchBody;
+      return matchUrl || matchMethod || matchStatus || matchError || matchBody;
     }
 
     return true;
   });
 
   const selectedRequest =
-    requests.find((r) => r.id === selectedRequestId) || (filteredRequests.length > 0 ? filteredRequests[0] : null);
+    filteredRequests.find((r) => r.id === selectedRequestId) || (filteredRequests.length > 0 ? filteredRequests[0] : null);
+
+  const errorCount = requests.filter(isRequestError).length;
 
   const handleCopy = (text: string, key: string) => {
     try {
@@ -108,6 +128,14 @@ export const NetworkInspectorModal: React.FC = () => {
                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
                   {requests.length} captured
                 </span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-950 text-blue-300 border border-blue-800">
+                  {filteredRequests.length} shown
+                </span>
+                {errorCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-950 text-red-400 border border-red-800">
+                    {errorCount} errors
+                  </span>
+                )}
               </div>
               <p className="text-xs text-neutral-400">
                 Intercepts all web requests, fetch, XHR, timedtext streams, and backend API responses in real time
@@ -152,6 +180,7 @@ export const NetworkInspectorModal: React.FC = () => {
                 { key: 'timedtext', label: 'YouTube TimedText / CC' },
                 { key: 'api', label: 'App APIs (/api/*)' },
                 { key: 'translation', label: 'Translations' },
+                { key: 'success', label: 'Success Only' },
                 { key: 'failed', label: 'Errors (4xx / 5xx)' },
               ] as const
             ).map((filter) => (
@@ -169,6 +198,28 @@ export const NetworkInspectorModal: React.FC = () => {
                 {filter.label}
               </button>
             ))}
+
+            <div className="h-4 w-px bg-neutral-700 mx-1 hidden sm:block" />
+
+            <button
+              id="network-filter-exclude-errors-toggle"
+              type="button"
+              onClick={() => dispatch(toggleExcludeErrors())}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition font-medium border ${
+                excludeErrors
+                  ? 'bg-amber-600/30 text-amber-300 border-amber-500 shadow-sm'
+                  : 'bg-neutral-800/80 text-neutral-300 border-neutral-700 hover:bg-neutral-700'
+              }`}
+              title="Filter out error requests (hide all 4xx, 5xx, and network errors)"
+            >
+              <ShieldAlert className={`w-3.5 h-3.5 ${excludeErrors ? 'text-amber-400' : 'text-neutral-400'}`} />
+              <span>Filter Out Errors</span>
+              {excludeErrors && (
+                <span className="ml-1 px-1 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300">
+                  ON
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Search Box */}
@@ -322,9 +373,16 @@ export const NetworkInspectorModal: React.FC = () => {
                 {selectedRequest.requestBody && (
                   <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                        Request Payload
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                          Request Payload
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono">
+                          {typeof selectedRequest.requestBody === 'string'
+                            ? `${selectedRequest.requestBody.length} chars`
+                            : `${JSON.stringify(selectedRequest.requestBody).length} chars`}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() =>
@@ -341,7 +399,7 @@ export const NetworkInspectorModal: React.FC = () => {
                         <span>Copy</span>
                       </button>
                     </div>
-                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-300 max-h-44">
+                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-300 max-h-64 whitespace-pre-wrap break-all">
                       {typeof selectedRequest.requestBody === 'object'
                         ? JSON.stringify(selectedRequest.requestBody, null, 2)
                         : String(selectedRequest.requestBody)}
@@ -352,9 +410,18 @@ export const NetworkInspectorModal: React.FC = () => {
                 {/* Response Body */}
                 <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                      Response Payload
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                        Response Payload
+                      </span>
+                      {selectedRequest.responseBody && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono">
+                          {typeof selectedRequest.responseBody === 'string'
+                            ? `${selectedRequest.responseBody.length.toLocaleString()} chars`
+                            : `${JSON.stringify(selectedRequest.responseBody).length.toLocaleString()} chars`}
+                        </span>
+                      )}
+                    </div>
                     {selectedRequest.responseBody && (
                       <button
                         type="button"
@@ -369,7 +436,7 @@ export const NetworkInspectorModal: React.FC = () => {
                         className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
                       >
                         {copiedKey === 'res-body' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedKey === 'res-body' ? 'Copied!' : 'Copy Body'}</span>
+                        <span>{copiedKey === 'res-body' ? 'Copied Full Body!' : 'Copy Full Response'}</span>
                       </button>
                     )}
                   </div>
@@ -384,7 +451,7 @@ export const NetworkInspectorModal: React.FC = () => {
                       Error: {selectedRequest.error}
                     </div>
                   ) : (
-                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-200 max-h-80">
+                    <pre className="text-xs font-mono bg-neutral-900 p-2.5 rounded border border-neutral-800 overflow-x-auto text-neutral-200 max-h-[32rem] whitespace-pre-wrap break-all">
                       {typeof selectedRequest.responseBody === 'object'
                         ? JSON.stringify(selectedRequest.responseBody, null, 2)
                         : String(selectedRequest.responseBody || '[Empty Response]')}

@@ -7,7 +7,7 @@ export default defineConfig({
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:3000',
     video: {
       mode: 'on',
       size: { width: 1280, height: 720 }
@@ -17,9 +17,9 @@ export default defineConfig({
   },
   outputDir: 'test-results',
   webServer: {
-    command: 'npx vite preview --port 4173 --host 127.0.0.1',
-    port: 4173,
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run start',
+    port: 3000,
+    reuseExistingServer: true,
     timeout: 30000,
   },
   projects: [
