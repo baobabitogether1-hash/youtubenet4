@@ -182,6 +182,9 @@ async function startServer() {
     res.sendFile(path.join(process.cwd(), 'update.apk.sh'));
   });
 
+  // Statically serve Cypress HTML reports
+  app.use('/cypress-report', express.static(path.join(process.cwd(), 'cypress', 'reports')));
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

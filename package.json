@@ -12,6 +12,7 @@
     "test:ui": "playwright test --ui",
     "test:cy": "cypress run",
     "test:cy:open": "cypress open",
+    "test:cy:report": "cypress run --reporter cypress-mochawesome-reporter",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
@@ -20,6 +21,7 @@
     "@reduxjs/toolkit": "^2.12.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "cypress-mochawesome-reporter": "^5.0.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "jszip": "^3.10.1",
