@@ -160,6 +160,209 @@ export async function checkApkUpdate(
   };
 }
 
+export interface ApkDownloadProgress {
+  state: 'idle' | 'downloading' | 'verifying' | 'ready' | 'installing' | 'error';
+  percent: number;
+  loadedBytes: number;
+  totalBytes: number;
+  speedBps: number;
+  error?: string;
+  blobUrl?: string;
+}
+
+/**
+ * Downloads APK with real-time byte tracking and triggers package installation
+ */
+export async function downloadAndInstallApkWithProgress(
+  downloadUrl: string,
+  fileName = 'YouTube-Viewer-debug.apk',
+  onProgress?: (progress: ApkDownloadProgress) => void
+): Promise<{ success: boolean; blobUrl?: string; error?: string }> {
+  const updateProgress = (p: ApkDownloadProgress) => {
+    onProgress?.(p);
+  };
+
+  updateProgress({
+    state: 'downloading',
+    percent: 0,
+    loadedBytes: 0,
+    totalBytes: 0,
+    speedBps: 0,
+  });
+
+  if (typeof window !== 'undefined' && window.AndroidNativeShell?.showToast) {
+    try {
+      window.AndroidNativeShell.showToast(`Starting download: ${fileName}`);
+    } catch {}
+  }
+
+  // Choose proxy endpoint first to bypass CORS and stream with Content-Length
+  const proxyUrl = `/api/download-apk-proxy?url=${encodeURIComponent(downloadUrl)}&name=${encodeURIComponent(fileName)}`;
+
+  let response: Response | null = null;
+  let targetFetchUrl = proxyUrl;
+
+  try {
+    response = await fetch(targetFetchUrl);
+    if (!response.ok) {
+      // Fallback to direct download URL
+      targetFetchUrl = downloadUrl;
+      response = await fetch(targetFetchUrl);
+    }
+  } catch (err: any) {
+    try {
+      targetFetchUrl = downloadUrl;
+      response = await fetch(targetFetchUrl);
+    } catch (directErr: any) {
+      const errMsg = `Network error downloading APK: ${err.message || directErr.message || 'Connection refused'}`;
+      updateProgress({
+        state: 'error',
+        percent: 0,
+        loadedBytes: 0,
+        totalBytes: 0,
+        speedBps: 0,
+        error: errMsg,
+      });
+      return { success: false, error: errMsg };
+    }
+  }
+
+  if (!response || !response.ok) {
+    const statusText = response ? `HTTP ${response.status} ${response.statusText}` : 'No response';
+    const errMsg = `Failed to download APK (${statusText}). Please check your internet connection or use the direct download link.`;
+    updateProgress({
+      state: 'error',
+      percent: 0,
+      loadedBytes: 0,
+      totalBytes: 0,
+      speedBps: 0,
+      error: errMsg,
+    });
+    return { success: false, error: errMsg };
+  }
+
+  const contentLengthHeader = response.headers.get('content-length');
+  const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 15 * 1024 * 1024; // default ~15MB
+
+  if (!response.body) {
+    const errMsg = 'Readable stream not supported or empty body received.';
+    updateProgress({
+      state: 'error',
+      percent: 0,
+      loadedBytes: 0,
+      totalBytes,
+      speedBps: 0,
+      error: errMsg,
+    });
+    return { success: false, error: errMsg };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loadedBytes = 0;
+  const startTime = Date.now();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      if (value) {
+        chunks.push(value);
+        loadedBytes += value.length;
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const speedBps = elapsedSec > 0 ? loadedBytes / elapsedSec : 0;
+        const calculatedPercent = totalBytes > 0 ? Math.min(99, Math.round((loadedBytes / totalBytes) * 100)) : 50;
+
+        updateProgress({
+          state: 'downloading',
+          percent: calculatedPercent,
+          loadedBytes,
+          totalBytes: Math.max(totalBytes, loadedBytes),
+          speedBps,
+        });
+      }
+    }
+  } catch (readErr: any) {
+    const errMsg = `Download interrupted: ${readErr.message || 'Connection lost'}`;
+    updateProgress({
+      state: 'error',
+      percent: 0,
+      loadedBytes,
+      totalBytes,
+      speedBps: 0,
+      error: errMsg,
+    });
+    return { success: false, error: errMsg };
+  }
+
+  // Verifying downloaded APK blob
+  updateProgress({
+    state: 'verifying',
+    percent: 99,
+    loadedBytes,
+    totalBytes: loadedBytes,
+    speedBps: 0,
+  });
+
+  const blob = new Blob(chunks, { type: 'application/vnd.android.package-archive' });
+  if (blob.size < 1000) {
+    const errMsg = 'Downloaded file is corrupt or invalid (file size less than 1KB).';
+    updateProgress({
+      state: 'error',
+      percent: 0,
+      loadedBytes: blob.size,
+      totalBytes: blob.size,
+      speedBps: 0,
+      error: errMsg,
+    });
+    return { success: false, error: errMsg };
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+
+  updateProgress({
+    state: 'installing',
+    percent: 100,
+    loadedBytes: blob.size,
+    totalBytes: blob.size,
+    speedBps: 0,
+    blobUrl,
+  });
+
+  if (typeof window !== 'undefined' && window.AndroidNativeShell?.showToast) {
+    try {
+      window.AndroidNativeShell.showToast(`Download complete (${formatBytes(blob.size)}). Opening installer...`);
+    } catch {}
+  }
+
+  // Trigger browser/system download & install prompt
+  try {
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 1000);
+  } catch (clickErr: any) {
+    console.warn('Click download trigger failed:', clickErr);
+  }
+
+  updateProgress({
+    state: 'ready',
+    percent: 100,
+    loadedBytes: blob.size,
+    totalBytes: blob.size,
+    speedBps: 0,
+    blobUrl,
+  });
+
+  return { success: true, blobUrl };
+}
+
 /**
  * Triggers in-app installation of the APK
  * In Android WebView/Chrome, initiating download prompts the Android Package Installer.
@@ -196,8 +399,11 @@ export function installApkViaApp(downloadUrl: string, fileName = 'YouTube-Viewer
 /**
  * Generate standard ADB / Bash command for PC or Termux installation
  */
-export function getAdbCurlCommand(downloadUrl: string): string {
-  return `curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash -s -- "${downloadUrl}"`;
+export function getAdbCurlCommand(downloadUrl?: string): string {
+  if (downloadUrl) {
+    return `curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash -s -- "${downloadUrl}"`;
+  }
+  return `curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash`;
 }
 
 export function getBashScriptCommand(downloadUrl: string): string {

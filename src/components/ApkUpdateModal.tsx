@@ -21,8 +21,11 @@ import {
   DEFAULT_REPO,
   FALLBACK_REPO,
   ApkReleaseInfo,
+  ApkDownloadProgress,
   checkApkUpdate,
+  downloadAndInstallApkWithProgress,
   installApkViaApp,
+  formatBytes,
   getAdbCurlCommand,
   getBashScriptCommand,
 } from '../utils/apkUpdater';
@@ -48,11 +51,14 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
   const [showQr, setShowQr] = useState(false);
   const [customApkUrl, setCustomApkUrl] = useState('');
   const [installedNotice, setInstalledNotice] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<ApkDownloadProgress | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const handleCheck = async (targetRepo = repo) => {
     setIsLoading(true);
     setError(null);
     setInstalledNotice(null);
+    setInstallError(null);
     try {
       logInfo('ApkUpdater', `Checking for newer APK releases in ${targetRepo}...`);
       const info = await checkApkUpdate(targetRepo, currentVersion);
@@ -88,12 +94,46 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
     }
   };
 
-  const handleInstallViaApp = (url: string, name?: string) => {
-    setInstalledNotice(
-      'Download initiated! In Android, tap the downloaded APK notification or open Downloads to complete the update.'
-    );
-    installApkViaApp(url, name);
-    logInfo('ApkUpdater', `Initiated in-app installation for ${name || 'APK'} from ${url}`);
+  const handleInstallViaApp = async (url: string, name?: string) => {
+    setInstallError(null);
+    setInstalledNotice(null);
+    logInfo('ApkUpdater', `Starting in-app download and installation for ${name || 'APK'} from ${url}...`);
+
+    try {
+      const result = await downloadAndInstallApkWithProgress(
+        url,
+        name || 'YouTube-Viewer-debug.apk',
+        (progress) => {
+          setDownloadProgress(progress);
+          if (progress.state === 'error' && progress.error) {
+            setInstallError(progress.error);
+            logError('ApkUpdater', `In-app APK installation failed: ${progress.error}`);
+          }
+        }
+      );
+
+      if (result.success) {
+        setInstalledNotice(
+          'Download finished! Opening Android package installer. If the system prompt does not appear, check your device Downloads folder or tap the direct APK link below.'
+        );
+        logInfo('ApkUpdater', `In-app installation triggered successfully for ${name || 'APK'}.`);
+      } else if (result.error) {
+        setInstallError(result.error);
+        logError('ApkUpdater', `In-app installation failed: ${result.error}`);
+      }
+    } catch (err: any) {
+      const msg = err.message || 'An unexpected error occurred during APK installation.';
+      setInstallError(msg);
+      setDownloadProgress({
+        state: 'error',
+        percent: 0,
+        loadedBytes: 0,
+        totalBytes: 0,
+        speedBps: 0,
+        error: msg,
+      });
+      logError('ApkUpdater', `Installation error: ${msg}`);
+    }
   };
 
   const activeDownloadUrl =
@@ -274,48 +314,148 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
               )}
 
               {/* PRIMARY ACTION: Install via App */}
-              <div className="pt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  id="install-apk-via-app-button"
-                  data-testid="install-apk-via-app-button"
-                  onClick={() => handleInstallViaApp(releaseInfo.downloadUrl, releaseInfo.apkName)}
-                  className="flex-1 min-w-[200px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition active:scale-95"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>
-                    {releaseInfo.isNewer
-                      ? `Install ${releaseInfo.tagName} via App`
-                      : `Download ${releaseInfo.tagName} APK`}
-                  </span>
-                </button>
+              <div className="pt-2 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    id="install-apk-via-app-button"
+                    data-testid="install-apk-via-app-button"
+                    disabled={downloadProgress?.state === 'downloading' || downloadProgress?.state === 'verifying'}
+                    onClick={() => handleInstallViaApp(releaseInfo.downloadUrl, releaseInfo.apkName)}
+                    className="flex-1 min-w-[200px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition active:scale-95"
+                  >
+                    {downloadProgress?.state === 'downloading' || downloadProgress?.state === 'verifying' ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                        <span>Downloading ({downloadProgress.percent}%)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>
+                          {releaseInfo.isNewer
+                            ? `Install ${releaseInfo.tagName} via App`
+                            : `Download & Install ${releaseInfo.tagName} APK`}
+                        </span>
+                      </>
+                    )}
+                  </button>
 
-                <button
-                  type="button"
-                  id="toggle-qr-code-button"
-                  onClick={() => setShowQr(!showQr)}
-                  className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 flex items-center gap-1.5 transition"
-                  title="Scan with phone camera to download directly"
-                >
-                  <QrCode className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="hidden sm:inline">Phone QR</span>
-                </button>
+                  <button
+                    type="button"
+                    id="toggle-qr-code-button"
+                    onClick={() => setShowQr(!showQr)}
+                    className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 flex items-center gap-1.5 transition"
+                    title="Scan with phone camera to download directly"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden sm:inline">Phone QR</span>
+                  </button>
 
-                <a
-                  href={releaseInfo.htmlUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 flex items-center gap-1.5 transition"
-                  title="View full GitHub release page"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Release</span>
-                </a>
+                  <a
+                    href={releaseInfo.downloadUrl}
+                    download={releaseInfo.apkName}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 flex items-center gap-1.5 transition"
+                    title="Direct browser download link"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Direct Link</span>
+                  </a>
+                </div>
+
+                {/* Real-time Download & Installation Progress */}
+                {downloadProgress && (downloadProgress.state === 'downloading' || downloadProgress.state === 'verifying' || downloadProgress.state === 'installing' || downloadProgress.state === 'ready') && (
+                  <div
+                    id="apk-download-progress-container"
+                    data-testid="apk-download-progress"
+                    className="p-3.5 rounded-xl bg-neutral-900 border border-emerald-500/40 space-y-2 animate-fadeIn"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        {downloadProgress.state === 'ready' || downloadProgress.state === 'installing' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                        )}
+                        <span className="font-semibold text-white">
+                          {downloadProgress.state === 'verifying'
+                            ? 'Verifying APK integrity...'
+                            : downloadProgress.state === 'installing'
+                            ? 'Opening package installer...'
+                            : downloadProgress.state === 'ready'
+                            ? 'APK ready for installation!'
+                            : `Downloading APK (${downloadProgress.percent}%)...`}
+                        </span>
+                      </div>
+                      <span className="font-mono text-emerald-400 font-bold">
+                        {downloadProgress.percent}%
+                      </span>
+                    </div>
+
+                    {/* Progress Track */}
+                    <div className="w-full bg-neutral-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-neutral-700">
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-300 ease-out"
+                        style={{ width: `${Math.max(3, downloadProgress.percent)}%` }}
+                      />
+                    </div>
+
+                    {/* Byte count & transfer stats */}
+                    <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
+                      <span>
+                        {formatBytes(downloadProgress.loadedBytes)} / {formatBytes(downloadProgress.totalBytes)}
+                      </span>
+                      {downloadProgress.speedBps > 0 && (
+                        <span>
+                          {formatBytes(downloadProgress.speedBps)}/s
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* In-App Installation Error Notification */}
+                {installError && (
+                  <div
+                    id="apk-install-error-alert"
+                    data-testid="apk-install-error"
+                    className="p-3.5 rounded-xl bg-red-950/60 border border-red-700/80 text-red-200 text-xs flex items-start gap-3 animate-fadeIn"
+                  >
+                    <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-2">
+                      <div className="font-bold text-red-300 flex items-center justify-between">
+                        <span>APK Download / Installation Error</span>
+                      </div>
+                      <p className="text-red-200/90 leading-relaxed">{installError}</p>
+                      <div className="pt-1 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleInstallViaApp(releaseInfo.downloadUrl, releaseInfo.apkName)}
+                          className="px-2.5 py-1 rounded-lg bg-red-900 hover:bg-red-800 text-white font-semibold transition"
+                        >
+                          Retry Download
+                        </button>
+                        <a
+                          href={releaseInfo.downloadUrl}
+                          download={releaseInfo.apkName}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 inline-flex items-center gap-1 font-medium transition"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Direct Browser Download</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Installed Notice */}
               {installedNotice && (
-                <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-600/60 text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn">
+                <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-600/60 text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>{installedNotice}</span>
                 </div>
@@ -338,60 +478,66 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
             </div>
 
             {/* ADB / Terminal Installation Command */}
-            <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2.5">
+            <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
                   <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Install via Terminal / ADB (Windows, Mac, Linux)</span>
+                  <span>Install via Terminal / ADB (Remote One-Liner)</span>
                 </span>
-                <span className="text-[11px] text-neutral-500 font-mono">update.apk.sh</span>
+                <span className="text-[11px] text-emerald-400 font-mono">No local files required</span>
               </div>
               <p className="text-xs text-neutral-400">
-                Run this single command in Git Bash or Terminal to download, verify, and install via ADB:
+                Run this remote CLI command in Git Bash or Terminal to download and install the latest APK automatically via ADB without cloning the repository:
               </p>
 
-              {/* Curl command snippet */}
-              <div className="relative group">
-                <pre className="p-2.5 rounded-lg bg-black/60 border border-neutral-800 text-xs text-emerald-300 font-mono overflow-x-auto whitespace-pre-wrap break-all select-all">
-                  {getAdbCurlCommand(releaseInfo.downloadUrl)}
-                </pre>
-                <button
-                  type="button"
-                  id="copy-adb-curl-cmd"
-                  onClick={() => handleCopy(getAdbCurlCommand(releaseInfo.downloadUrl), 'curl')}
-                  className="absolute top-2 right-2 px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium border border-neutral-700 flex items-center gap-1 transition"
-                >
-                  {copiedCmd === 'curl' ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </button>
+              {/* Remote CLI command without relying on local files */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-neutral-400 font-medium">1. Remote One-Liner (curl + bash):</span>
+                <div className="relative group">
+                  <pre className="p-2.5 rounded-lg bg-black/60 border border-neutral-800 text-xs text-emerald-300 font-mono overflow-x-auto whitespace-pre-wrap break-all select-all">
+                    {getAdbCurlCommand(releaseInfo.downloadUrl)}
+                  </pre>
+                  <button
+                    type="button"
+                    id="copy-adb-curl-cmd"
+                    onClick={() => handleCopy(getAdbCurlCommand(releaseInfo.downloadUrl), 'curl')}
+                    className="absolute top-2 right-2 px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium border border-neutral-700 flex items-center gap-1 transition"
+                  >
+                    {copiedCmd === 'curl' ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
-              {/* Bash script command snippet */}
-              <div className="relative group">
-                <pre className="p-2 rounded-lg bg-black/40 border border-neutral-800/80 text-[11px] text-indigo-300 font-mono overflow-x-auto whitespace-pre-wrap break-all select-all">
-                  {getBashScriptCommand(releaseInfo.downloadUrl)}
-                </pre>
-                <button
-                  type="button"
-                  id="copy-bash-cmd"
-                  onClick={() => handleCopy(getBashScriptCommand(releaseInfo.downloadUrl), 'bash')}
-                  className="absolute top-1.5 right-2 px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] border border-neutral-700 flex items-center gap-1 transition"
-                >
-                  {copiedCmd === 'bash' ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                </button>
+              {/* Local Bash script command snippet */}
+              <div className="space-y-1.5 pt-1 border-t border-neutral-900">
+                <span className="text-[11px] text-neutral-500 font-medium">2. Or if running from local project repository:</span>
+                <div className="relative group">
+                  <pre className="p-2 rounded-lg bg-black/40 border border-neutral-800/80 text-[11px] text-indigo-300 font-mono overflow-x-auto whitespace-pre-wrap break-all select-all">
+                    {getBashScriptCommand(releaseInfo.downloadUrl)}
+                  </pre>
+                  <button
+                    type="button"
+                    id="copy-bash-cmd"
+                    onClick={() => handleCopy(getBashScriptCommand(releaseInfo.downloadUrl), 'bash')}
+                    className="absolute top-1.5 right-2 px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] border border-neutral-700 flex items-center gap-1 transition"
+                  >
+                    {copiedCmd === 'bash' ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

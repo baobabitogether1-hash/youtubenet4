@@ -80,3 +80,56 @@ export function saveAppSettings(settings: AppSettings): void {
     console.warn('[AppSettings] Failed to save settings:', err);
   }
 }
+
+// ----------------------------------------------------------------------------
+// Per-VideoID Settings Management (Target Languages, TTS Rates, Play Order)
+// ----------------------------------------------------------------------------
+export interface VideoSpecificSettings {
+  targetLanguages?: any[];
+  ttsRates?: Record<string, number>; // langCode -> rate
+  playOrder?: 'video_first' | 'tts_first';
+  sourceLang?: string;
+  activeTargetLang?: string;
+  lastUpdated?: number;
+}
+
+const VIDEO_SETTINGS_KEY_PREFIX = 'yt_video_settings_';
+
+export function loadVideoSettings(videoId: string): VideoSpecificSettings | null {
+  if (typeof window === 'undefined' || !videoId) return null;
+  try {
+    const raw = localStorage.getItem(`${VIDEO_SETTINGS_KEY_PREFIX}${videoId}`);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.warn(`[AppSettings] Failed to load settings for video ${videoId}:`, err);
+  }
+  return null;
+}
+
+export function saveVideoSettings(
+  videoId: string,
+  settings: Partial<VideoSpecificSettings>
+): void {
+  if (typeof window === 'undefined' || !videoId) return;
+  try {
+    const existing = loadVideoSettings(videoId) || {};
+    const updated: VideoSpecificSettings = {
+      ...existing,
+      ...settings,
+      ttsRates: {
+        ...(existing.ttsRates || {}),
+        ...(settings.ttsRates || {}),
+      },
+      lastUpdated: Date.now(),
+    };
+    localStorage.setItem(
+      `${VIDEO_SETTINGS_KEY_PREFIX}${videoId}`,
+      JSON.stringify(updated)
+    );
+  } catch (err) {
+    console.warn(`[AppSettings] Failed to save settings for video ${videoId}:`, err);
+  }
+}
+

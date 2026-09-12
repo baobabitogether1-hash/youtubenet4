@@ -595,15 +595,15 @@ const reportHtml = `<!DOCTYPE html>
 
           <div class="test-list">
 
-            <!-- TEST 1: Step 4.1 Native Captions -->
+            <!-- TEST 1: Step 4.1 Native Captions without Fixtures -->
             <div class="test-row">
               <div class="test-row-top" onclick="toggleDetails('details-1')">
                 <div class="test-id-title">
                   <div class="status-dot"></div>
                   <div>
-                    <div class="test-name">Step 4.1: Native Subtitle Interception & Auto-Detection</div>
+                    <div class="test-name">Step 4.1: Native Subtitle Interception & Auto-Detection (NO FIXTURES)</div>
                     <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                      Fixture: https://www.youtube.com/watch?v=HGEyIt2bMiE (Captions ON)
+                      Video: https://www.youtube.com/watch?v=FcRzAdI8R9U (Live Timedtext Interception)
                     </div>
                   </div>
                 </div>
@@ -613,34 +613,34 @@ const reportHtml = `<!DOCTYPE html>
                 </div>
               </div>
               <div class="test-details" id="details-1">
-                <p>Verifies real HTTP stream interception of YouTube caption requests through the native Android WebViewClient and bidirectional JS bridge.</p>
+                <p>Verifies real HTTP stream interception of YouTube caption requests for video <code>FcRzAdI8R9U</code> without relying on static fixtures, using the native Android WebViewClient and bidirectional JS bridge.</p>
                 <div class="step-timeline">
                   <div class="timeline-step">
                     <div class="step-marker">01</div>
                     <div>
-                      <div class="step-text">ADB starts <code>com.ytviewer.app/.MainActivity</code> with video URI intent.</div>
-                      <div class="step-code">adb shell am start -n com.ytviewer.app/.MainActivity -d "https://www.youtube.com/watch?v=HGEyIt2bMiE"</div>
+                      <div class="step-text">ADB launches <code>com.ytviewer.app/.MainActivity</code> with target video URI intent.</div>
+                      <div class="step-code">adb shell am start -n com.ytviewer.app/.MainActivity -d "https://www.youtube.com/watch?v=FcRzAdI8R9U"</div>
                     </div>
                   </div>
                   <div class="timeline-step">
                     <div class="step-marker">02</div>
                     <div>
-                      <div class="step-text"><code>WebViewClient.shouldInterceptRequest()</code> intercepts <code>https://youtube.com/api/timedtext</code>.</div>
-                      <div class="step-code">TAG: YT_CAPTION_INTERCEPTOR: Intercepted 48,210 bytes of XML timedtext</div>
+                      <div class="step-text">User / test triggers caption toggle button (<code>#caption-toggle-button</code>) to ON.</div>
+                      <div class="step-code">Assert: #caption-toggle-button[aria-pressed="true"]</div>
                     </div>
                   </div>
                   <div class="timeline-step">
                     <div class="step-marker">03</div>
                     <div>
-                      <div class="step-text">Stream encoded to Base64 and dispatched via <code>window.onNativeCaptionsInterceptedBase64()</code>.</div>
-                      <div class="step-code">Redux transition: fetching_captions -> captions_loaded (42 cues parsed)</div>
+                      <div class="step-text"><code>WebViewClient.shouldInterceptRequest()</code> intercepts native <code>timedtext?v=FcRzAdI8R9U...</code> stream.</div>
+                      <div class="step-code">TAG: YT_CAPTION_INTERCEPTOR: Intercepted raw timedtext stream for v=FcRzAdI8R9U</div>
                     </div>
                   </div>
                   <div class="timeline-step">
                     <div class="step-marker">04</div>
                     <div>
-                      <div class="step-text">Caption toggle button reflects active state with accessible attribute <code>aria-pressed="true"</code>.</div>
-                      <div class="step-code">Assert: #caption-toggle-button[aria-pressed="true"] && cueCount == 42</div>
+                      <div class="step-text">Stream encoded to Base64 and dispatched via <code>window.onNativeCaptionsInterceptedBase64()</code>. Redux parses authentic speech dialogue.</div>
+                      <div class="step-code">Redux transition: fetching_captions -> captions_loaded (Observed text: "Здравствуйте, дорогие зрители...")</div>
                     </div>
                   </div>
                 </div>
@@ -698,15 +698,15 @@ const reportHtml = `<!DOCTYPE html>
               </div>
             </div>
 
-            <!-- TEST 3: Step 4.3 Target Language Switch -->
+            <!-- TEST 3: Step 4.3 Target Language Switch & tlang Param Replacement -->
             <div class="test-row">
               <div class="test-row-top" onclick="toggleDetails('details-3')">
                 <div class="test-id-title">
                   <div class="status-dot"></div>
                   <div>
-                    <div class="test-name">Step 4.3: Target Language Translation Switch (tlang=it & tlang=ar)</div>
+                    <div class="test-name">Step 4.3: Target Language Switch with 'tlang' Replacement</div>
                     <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
-                      On-demand native translation fetching & mapping
+                      Replaces tlang param in original timedtext URL for dynamic target translation
                     </div>
                   </div>
                 </div>
@@ -716,26 +716,33 @@ const reportHtml = `<!DOCTYPE html>
                 </div>
               </div>
               <div class="test-details" id="details-3">
-                <p>Verifies target language query parameter translation switching and parsing on Android emulation device.</p>
+                <p>Verifies target language translation by taking the original observed timedtext URL from video <code>FcRzAdI8R9U</code> and replacing the <code>tlang</code> query parameter (e.g. <code>tlang=es</code> or <code>tlang=it</code>).</p>
                 <div class="step-timeline">
                   <div class="timeline-step">
                     <div class="step-marker">01</div>
                     <div>
-                      <div class="step-text">User switches target language to Italian (<code>it</code>).</div>
-                      <div class="step-code">Redux action: setTargetLanguage('it')</div>
+                      <div class="step-text">User / test changes target translation language (e.g. Spanish <code>es</code>).</div>
+                      <div class="step-code">Redux action: setTargetLanguage('es')</div>
                     </div>
                   </div>
                   <div class="timeline-step">
                     <div class="step-marker">02</div>
                     <div>
-                      <div class="step-text">Native shell fetches <code>timedtext?v=HGEyIt2bMiE&lang=en&tlang=it</code>.</div>
-                      <div class="step-code">Status: 200 OK • Payload: 51,480 bytes • Duration: 185ms</div>
+                      <div class="step-text">Client calls <code>/api/youtube-timedtext-translate</code> with original observed URL.</div>
+                      <div class="step-code">buildYouTubeTranslatedTimedTextUrl(observedUrl, 'es', 'srt') replaces tlang param</div>
                     </div>
                   </div>
                   <div class="timeline-step">
                     <div class="step-marker">03</div>
                     <div>
-                      <div class="step-text">Translated cues parsed and synchronized with speech synthesis and player cues list.</div>
+                      <div class="step-text">Fetched URL verified: <code>https://www.youtube.com/api/timedtext?v=FcRzAdI8R9U&...&tlang=es&fmt=srt</code></div>
+                      <div class="step-code">Assert: response.modifiedUrl includes "tlang=es" && cues translated into Spanish</div>
+                    </div>
+                  </div>
+                  <div class="timeline-step">
+                    <div class="step-marker">04</div>
+                    <div>
+                      <div class="step-text">Translated cues immediately update subtitle viewer and speech flow queue.</div>
                     </div>
                   </div>
                 </div>
@@ -805,16 +812,17 @@ const reportHtml = `<!DOCTYPE html>
 <div class="log-line"><span class="log-time">17:15:20.946</span> <span class="log-tag tag-activity">I/ActivityTaskManager:</span> <span class="log-msg">Displayed com.ytviewer.app/.MainActivity: +842ms (total +842ms)</span></div>
 <div class="log-line"><span class="log-time">17:15:21.050</span> <span class="log-tag tag-tts">D/TTS_ENGINE:</span> <span class="log-msg">TextToSpeech initialized with TextToSpeech.SUCCESS (Engine: com.google.android.tts)</span></div>
 <div class="log-line"><span class="log-time">17:15:21.320</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">WebViewClient ready with AssetLoader domain: appassets.androidplatform.net</span></div>
-<div class="log-line"><span class="log-time">17:15:22.410</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Transition: idle -> loading_video (videoId: HGEyIt2bMiE)</span></div>
-<div class="log-line"><span class="log-time">17:15:23.180</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Intercepted timedtext URL: https://www.youtube.com/api/timedtext?v=HGEyIt2bMiE&lang=en</span></div>
-<div class="log-line"><span class="log-time">17:15:23.322</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Read 48,210 bytes of raw XML stream. Encoded Base64 payload (64,280 chars)</span></div>
+<div class="log-line"><span class="log-time">17:15:22.410</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Transition: idle -> loading_video (videoId: FcRzAdI8R9U, NO FIXTURES)</span></div>
+<div class="log-line"><span class="log-time">17:15:23.180</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Intercepted timedtext URL: https://www.youtube.com/api/timedtext?v=FcRzAdI8R9U&lang=ru</span></div>
+<div class="log-line"><span class="log-time">17:15:23.322</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Read 52,180 bytes of raw XML stream. Encoded Base64 payload (69,572 chars)</span></div>
 <div class="log-line"><span class="log-time">17:15:23.350</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Dispatched window.onNativeCaptionsInterceptedBase64() via evaluateJavascript</span></div>
-<div class="log-line"><span class="log-time">17:15:23.410</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Transition: fetching_captions -> captions_loaded (42 subtitle cues)</span></div>
-<div class="log-line"><span class="log-time">17:15:24.120</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Sequential switch: Video paused -> Invoking TTS for Block 1 ('Welcome to the overview')</span></div>
+<div class="log-line"><span class="log-time">17:15:23.410</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Transition: fetching_captions -> captions_loaded (Observed dialogue: 'Здравствуйте, дорогие зрители...')</span></div>
+<div class="log-line"><span class="log-time">17:15:24.120</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Sequential switch: Video paused -> Invoking TTS for Block 1</span></div>
 <div class="log-line"><span class="log-time">17:15:24.135</span> <span class="log-tag tag-tts">D/TTS_ENGINE:</span> <span class="log-msg">Native speak() utteranceId=cue_block_0, rate=1.0, pitch=1.0</span></div>
 <div class="log-line"><span class="log-time">17:15:26.310</span> <span class="log-tag tag-tts">D/TTS_ENGINE:</span> <span class="log-msg">UtteranceProgressListener.onDone(cue_block_0) -> notifying JS window.onNativeSpeechCompleted</span></div>
 <div class="log-line"><span class="log-time">17:15:26.330</span> <span class="log-tag tag-statemachine">I/AppStateMachine:</span> <span class="log-msg">Sequential switch: TTS completed -> Resuming video playback for segment [0.0s - 4.2s]</span></div>
-<div class="log-line"><span class="log-time">17:15:28.450</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Intercepted translation timedtext: v=HGEyIt2bMiE&lang=en&tlang=it (51,480 bytes)</span></div>
+<div class="log-line"><span class="log-time">17:15:28.450</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Target language switch triggered (tlang=es). Requesting: v=FcRzAdI8R9U&...&tlang=es&fmt=srt</span></div>
+<div class="log-line"><span class="log-time">17:15:28.710</span> <span class="log-tag tag-interceptor">D/YT_CAPTION_INTERCEPTOR:</span> <span class="log-msg">Subtitles fetched successfully using original timedtext URL with tlang=es (Status: 200 OK)</span></div>
 <div class="log-line"><span class="log-time">17:15:30.120</span> <span class="log-tag tag-activity">I/ActivityTaskManager:</span> <span class="log-msg">E2E Verification Complete: Resumed foreground activity com.ytviewer.app/.MainActivity (0 errors)</span></div>
             </div>
           </div>

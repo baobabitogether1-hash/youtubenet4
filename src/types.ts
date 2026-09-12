@@ -11,6 +11,11 @@ export interface LibraryVideoItem {
   title: string;
   cues: CaptionCue[];
   timestamp: number;
+  targetLanguages?: TargetLanguage[];
+  ttsRates?: Record<string, number>;
+  playOrder?: SyncPlayOrder;
+  sourceLang?: string;
+  activeTargetLang?: string;
 }
 
 export interface PlayerOptions {

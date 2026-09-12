@@ -41,6 +41,10 @@ import { formatTimestamp, cleanAndFixEncoding, parseRawCaptionData } from '../ut
 import { isAndroidNativeTTS } from '../lib/ttsEngine';
 import { LanguageSettingsModal } from './LanguageSettingsModal';
 import { ObservedTimedTextModal } from './ObservedTimedTextModal';
+import { loadVideoSettings, saveVideoSettings, VideoSpecificSettings } from '../utils/appSettings';
+import { useAppDispatch } from '../store/hooks';
+import { transition } from '../store/stateMachineSlice';
+import { logInfo } from '../utils/logBuffer';
 
 interface SubtitlesTeacherPanelProps {
   cues: CaptionCue[];
@@ -53,6 +57,7 @@ interface SubtitlesTeacherPanelProps {
   observedTimedTextUrl?: string | null;
   videoId?: string;
   onUpdateObservedTimedTextUrl?: (url: string) => void;
+  onUpdateVideoSettings?: (videoId: string, settings: Partial<VideoSpecificSettings>) => void;
 }
 
 const DEFAULT_TARGET_LANGUAGES: TargetLanguage[] = [
@@ -103,8 +108,16 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
   observedTimedTextUrl,
   videoId,
   onUpdateObservedTimedTextUrl,
-}) => {
+  onUpdateVideoSettings,
+}: SubtitlesTeacherPanelProps) => {
+  const dispatch = useAppDispatch();
   const [targetLanguages, setTargetLanguages] = useState<TargetLanguage[]>(() => {
+    if (videoId) {
+      const vSettings = loadVideoSettings(videoId);
+      if (vSettings?.targetLanguages && vSettings.targetLanguages.length > 0) {
+        return vSettings.targetLanguages;
+      }
+    }
     try {
       const saved = localStorage.getItem('yt_teacher_languages_v1');
       if (saved) {
@@ -119,12 +132,87 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
     return DEFAULT_TARGET_LANGUAGES;
   });
 
+  const [activeTargetLang, setActiveTargetLang] = useState<string>(() => {
+    if (videoId) {
+      const vSettings = loadVideoSettings(videoId);
+      if (vSettings?.activeTargetLang) return vSettings.activeTargetLang;
+    }
+    return 'it';
+  });
+
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isLangSettingsOpen, setIsLangSettingsOpen] = useState<boolean>(false);
   const [isObservedModalOpen, setIsObservedModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tableTranslations, setTableTranslations] = useState<Record<string, Record<string, string>>>({});
   const [langSources, setLangSources] = useState<Record<string, TranslationSource>>({});
+
+  const [playOrder, setPlayOrder] = useState<SyncPlayOrder>(() => {
+    if (videoId) {
+      const vSettings = loadVideoSettings(videoId);
+      if (vSettings?.playOrder) return vSettings.playOrder;
+    }
+    try {
+      const saved = localStorage.getItem('yt_teacher_play_order_v1');
+      if (saved === 'tts_first' || saved === 'video_first') return saved;
+    } catch {}
+    return 'video_first';
+  });
+
+  const [sourceLang, setSourceLang] = useState<string>(() => {
+    if (videoId) {
+      const vSettings = loadVideoSettings(videoId);
+      if (vSettings?.sourceLang) return vSettings.sourceLang;
+    }
+    return 'auto';
+  });
+
+  // Load per-video settings when videoId changes
+  useEffect(() => {
+    if (!videoId) return;
+    const vSettings = loadVideoSettings(videoId);
+    if (vSettings) {
+      if (vSettings.targetLanguages && vSettings.targetLanguages.length > 0) {
+        setTargetLanguages(vSettings.targetLanguages);
+      }
+      if (vSettings.playOrder) {
+        setPlayOrder(vSettings.playOrder);
+      }
+      if (vSettings.sourceLang) {
+        setSourceLang(vSettings.sourceLang);
+      }
+      if (vSettings.activeTargetLang) {
+        setActiveTargetLang(vSettings.activeTargetLang);
+      }
+    }
+  }, [videoId]);
+
+  const persistCurrentVideoSettings = (
+    langs?: TargetLanguage[],
+    order?: SyncPlayOrder,
+    activeLang?: string,
+    srcLang?: string
+  ) => {
+    if (!videoId) return;
+    const curLangs = langs || targetLanguages;
+    const curOrder = order || playOrder;
+    const curActiveLang = activeLang || activeTargetLang;
+    const curSrcLang = srcLang || sourceLang;
+    const ttsRates: Record<string, number> = {};
+    curLangs.forEach((l) => {
+      ttsRates[l.code] = l.ttsRate;
+    });
+
+    const data: VideoSpecificSettings = {
+      targetLanguages: curLangs,
+      playOrder: curOrder,
+      sourceLang: curSrcLang,
+      activeTargetLang: curActiveLang,
+      ttsRates,
+    };
+    saveVideoSettings(videoId, data);
+    onUpdateVideoSettings?.(videoId, data);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -152,20 +240,12 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
   };
 
   const updateLanguageVoice = (id: string, voice: string) => {
-    setTargetLanguages((prev) =>
-      prev.map((lang) => (lang.id === id ? { ...lang, voice } : lang))
-    );
+    setTargetLanguages((prev) => {
+      const updated = prev.map((lang) => (lang.id === id ? { ...lang, voice } : lang));
+      persistCurrentVideoSettings(updated);
+      return updated;
+    });
   };
-
-  const [playOrder, setPlayOrder] = useState<SyncPlayOrder>(() => {
-    try {
-      const saved = localStorage.getItem('yt_teacher_play_order_v1');
-      if (saved === 'tts_first' || saved === 'video_first') return saved;
-    } catch {}
-    return 'video_first';
-  });
-
-  const [sourceLang, setSourceLang] = useState<string>('auto');
 
   useEffect(() => {
     try {
@@ -225,10 +305,19 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
         if (res.source) {
           setLangSources((prev) => ({ ...prev, [lang.code]: res.source }));
         }
+        const transMap: Record<string, string> = {};
+        if (res.cues && Array.isArray(res.cues)) {
+          res.cues.forEach((c) => {
+            if (c.id && c.text) transMap[c.id] = c.text;
+          });
+        }
         if (res.translations) {
+          Object.assign(transMap, res.translations);
+        }
+        if (Object.keys(transMap).length > 0) {
           setTableTranslations((prev) => {
             const updated = { ...prev };
-            Object.entries(res.translations).forEach(([cId, text]) => {
+            Object.entries(transMap).forEach(([cId, text]) => {
               const cue = effectiveCues.find((c) => c.id === cId);
               const isOrig = cue && text.trim().toLowerCase() === cue.text.trim().toLowerCase();
               if (text && (!isOrig || lang.code === sourceLang)) {
@@ -329,16 +418,88 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
     return '';
   };
 
-  const toggleLanguage = (id: string) => {
-    setTargetLanguages((prev) =>
-      prev.map((lang) => (lang.id === id ? { ...lang, enabled: !lang.enabled } : lang))
+  const handleSelectActiveTargetLang = (code: string) => {
+    setActiveTargetLang(code);
+    const exists = targetLanguages.find((l) => l.code === code);
+    let updatedLangs: TargetLanguage[];
+    if (exists) {
+      updatedLangs = targetLanguages.map((l) => (l.code === code ? { ...l, enabled: true } : l));
+    } else {
+      const found = SUPPORTED_TARGET_LANGUAGES.find((l) => l.code === code);
+      const newLang: TargetLanguage = {
+        id: `lang-${code}-${Date.now()}`,
+        code,
+        name: found?.name || code,
+        ttsRate: 1.0,
+        enabled: true,
+        color: '#3b82f6',
+      };
+      updatedLangs = [...targetLanguages, newLang];
+    }
+    setTargetLanguages(updatedLangs);
+    persistCurrentVideoSettings(updatedLangs, playOrder, code);
+
+    logInfo('Translation', `Target language switched to ${code}. Fetching native timedtext translation (tlang=${code})...`);
+    dispatch(
+      transition({
+        to: 'syncing_tts',
+        actionName: 'TARGET_LANGUAGE_CHANGED',
+        payload: { videoId, targetLang: code },
+      })
     );
+
+    if (effectiveCues.length > 0) {
+      translateTrackWithNativeFirst({
+        originalCues: effectiveCues,
+        targetLang: code,
+        observedUrl: observedTimedTextUrl,
+        videoId,
+        sourceLang,
+        onStatusChange: (src) => {
+          setLangSources((prev) => ({ ...prev, [code]: src }));
+        },
+      }).then((res) => {
+        if (res.source) {
+          setLangSources((prev) => ({ ...prev, [code]: res.source }));
+        }
+        const transMap: Record<string, string> = {};
+        if (res.cues && Array.isArray(res.cues)) {
+          res.cues.forEach((c) => {
+            if (c.id && c.text) transMap[c.id] = c.text;
+          });
+        }
+        if (res.translations) {
+          Object.assign(transMap, res.translations);
+        }
+        if (Object.keys(transMap).length > 0) {
+          setTableTranslations((prev) => {
+            const updated = { ...prev };
+            Object.entries(transMap).forEach(([cId, text]) => {
+              updated[cId] = { ...(updated[cId] || {}), [code]: text };
+            });
+            return updated;
+          });
+        }
+      }).catch((err) => {
+        console.warn(`Translation error on target switch to ${code}:`, err);
+      });
+    }
+  };
+
+  const toggleLanguage = (id: string) => {
+    setTargetLanguages((prev) => {
+      const updated = prev.map((lang) => (lang.id === id ? { ...lang, enabled: !lang.enabled } : lang));
+      persistCurrentVideoSettings(updated);
+      return updated;
+    });
   };
 
   const updateLanguageRate = (id: string, rate: number) => {
-    setTargetLanguages((prev) =>
-      prev.map((lang) => (lang.id === id ? { ...lang, ttsRate: Math.max(0.5, Math.min(1.5, rate)) } : lang))
-    );
+    setTargetLanguages((prev) => {
+      const updated = prev.map((lang) => (lang.id === id ? { ...lang, ttsRate: Math.max(0.5, Math.min(1.5, rate)) } : lang));
+      persistCurrentVideoSettings(updated);
+      return updated;
+    });
   };
 
   const moveLanguageUp = (index: number) => {
@@ -348,6 +509,7 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
       const temp = arr[index - 1];
       arr[index - 1] = arr[index];
       arr[index] = temp;
+      persistCurrentVideoSettings(arr);
       return arr;
     });
   };
@@ -359,12 +521,17 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
       const temp = arr[index + 1];
       arr[index + 1] = arr[index];
       arr[index] = temp;
+      persistCurrentVideoSettings(arr);
       return arr;
     });
   };
 
   const removeLanguage = (id: string) => {
-    setTargetLanguages((prev) => prev.filter((lang) => lang.id !== id));
+    setTargetLanguages((prev) => {
+      const updated = prev.filter((lang) => lang.id !== id);
+      persistCurrentVideoSettings(updated);
+      return updated;
+    });
   };
 
   const [isAddingLang, setIsAddingLang] = useState(false);
@@ -503,6 +670,27 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-2">
+          {/* Target Language Dropdown Selector */}
+          <div className="flex items-center gap-1.5 bg-neutral-800/90 border border-neutral-700/90 rounded-xl px-2.5 py-1 shadow-sm">
+            <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <label htmlFor="target-language-select" className="text-xs font-semibold text-neutral-300 hidden sm:inline">
+              Target:
+            </label>
+            <select
+              id="target-language-select"
+              data-testid="target-language-select"
+              value={activeTargetLang}
+              onChange={(e) => handleSelectActiveTargetLang(e.target.value)}
+              className="bg-neutral-900 text-neutral-100 text-xs font-semibold rounded-lg px-2 py-1 border border-neutral-700 focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              {SUPPORTED_TARGET_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.name} ({l.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Target Languages Chips preview */}
           <div className="hidden sm:flex items-center gap-1.5 mr-1">
             {enabledTargetLangs.map((lang) => (
@@ -928,10 +1116,9 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
         onMoveUp={moveLanguageUp}
         onMoveDown={moveLanguageDown}
         onAddLanguage={(lang) => {
+          let updated: TargetLanguage[];
           if (targetLanguages.some((l) => l.code === lang.code)) {
-            setTargetLanguages((prev) =>
-              prev.map((l) => (l.code === lang.code ? { ...l, enabled: true } : l))
-            );
+            updated = targetLanguages.map((l) => (l.code === lang.code ? { ...l, enabled: true } : l));
           } else {
             const newLang: TargetLanguage = {
               id: `lang-${lang.code}-${Date.now()}`,
@@ -941,8 +1128,10 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
               enabled: true,
               color: '#6366f1',
             };
-            setTargetLanguages((prev) => [...prev, newLang]);
+            updated = [...targetLanguages, newLang];
           }
+          setTargetLanguages(updated);
+          persistCurrentVideoSettings(updated);
         }}
         onRemoveLanguage={removeLanguage}
         onTestSpeak={(lang) => {

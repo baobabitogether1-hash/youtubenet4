@@ -53,7 +53,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ActivityLogModal } from './components/ActivityLogModal';
 import { ApkUpdateModal } from './components/ApkUpdateModal';
 import { checkApkUpdate } from './utils/apkUpdater';
-import { loadAppSettings, saveAppSettings, AppSettings, DEFAULT_APP_SETTINGS } from './utils/appSettings';
+import { loadAppSettings, saveAppSettings, AppSettings, DEFAULT_APP_SETTINGS, loadVideoSettings, saveVideoSettings, VideoSpecificSettings } from './utils/appSettings';
 import { logInfo, logWarn, logSubtitles } from './utils/logBuffer';
 import { getMockedSubtitlesForVideo } from '../test/fixtures/defaultSubtitles';
 
@@ -396,34 +396,7 @@ export default function App() {
       }
     }
 
-    // Step 2.1 & 2.2: Platform Separation
-    // On Web Platform (browser), SOP and iframe sandboxing prevent cross-origin YouTube player interception.
-    // Strictly load mocked subtitle fixtures on Web.
-    const isAndroidNativeShell = typeof window !== 'undefined' && !!(window as any).AndroidNativeShell;
-
-    if (!isAndroidNativeShell) {
-      logSubtitles(`[WebPlatform] Using mocked subtitle fixtures for ${idToFetch}`);
-      const mockedCues = getMockedSubtitlesForVideo(idToFetch);
-      setCustomCues(mockedCues);
-      setCaptionsEnabled(true);
-      saveCachedSubtitles(idToFetch, mockedCues, {
-        title: `Video ${idToFetch}`,
-        originalUrl: currentUrl,
-      });
-      setFetchError(null);
-      setRestoredToast(`Auto-detected ${mockedCues.length} subtitles`);
-      setTimeout(() => setRestoredToast(null), 3000);
-      dispatch(
-        transition({
-          to: 'captions_loaded',
-          actionName: 'MOCKED_CAPTIONS_LOADED',
-          payload: { videoId: idToFetch, cueCount: mockedCues.length },
-        })
-      );
-      return;
-    }
-
-    // Android Native Shell / Emulator: Fetch with retry limit (Step 2.3: max retry limit X=2)
+    // Fetch subtitles with retry limit (Step 2.3: max retry limit X=2)
     setIsFetchingSubtitles(true);
     setFetchError(null);
     dispatch(
@@ -441,7 +414,7 @@ export default function App() {
     while (attempts < maxRetries && !success) {
       attempts++;
       try {
-        logSubtitles(`[AndroidNative] Fetching subtitles attempt ${attempts}/${maxRetries} for ${idToFetch}`);
+        logSubtitles(`Fetching subtitles attempt ${attempts}/${maxRetries} for ${idToFetch}`);
         const res = await fetch('/api/fetch-subtitles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -460,6 +433,7 @@ export default function App() {
         }));
 
         setCustomCues(sanitizedCues);
+        setCaptionsEnabled(true);
         saveCachedSubtitles(idToFetch, sanitizedCues, {
           title: `Video ${idToFetch}`,
           originalUrl: currentUrl,
@@ -470,11 +444,22 @@ export default function App() {
           setObservedTimedTextUrl(data.observedUrl);
         }
 
+        const vSettings = loadVideoSettings(idToFetch);
         setLibrary((prev) => {
           const existing = prev.find((item) => item.id === idToFetch);
           if (existing) {
             return prev.map((item) =>
-              item.id === idToFetch ? { ...item, cues: sanitizedCues } : item
+              item.id === idToFetch
+                ? {
+                    ...item,
+                    cues: sanitizedCues,
+                    targetLanguages: vSettings?.targetLanguages || item.targetLanguages,
+                    ttsRates: vSettings?.ttsRates || item.ttsRates,
+                    playOrder: vSettings?.playOrder || item.playOrder,
+                    sourceLang: vSettings?.sourceLang || item.sourceLang,
+                    activeTargetLang: vSettings?.activeTargetLang || item.activeTargetLang,
+                  }
+                : item
             );
           }
           const newItem: LibraryVideoItem = {
@@ -483,6 +468,11 @@ export default function App() {
             title: `Video ${idToFetch}`,
             cues: sanitizedCues,
             timestamp: Date.now(),
+            targetLanguages: vSettings?.targetLanguages,
+            ttsRates: vSettings?.ttsRates,
+            playOrder: vSettings?.playOrder,
+            sourceLang: vSettings?.sourceLang,
+            activeTargetLang: vSettings?.activeTargetLang,
           };
           return [newItem, ...prev];
         });
@@ -504,6 +494,7 @@ export default function App() {
           // Fallback to default subtitles only per Step 2.3
           const fallbackCues = getMockedSubtitlesForVideo(idToFetch);
           setCustomCues(fallbackCues);
+          setCaptionsEnabled(true);
           saveCachedSubtitles(idToFetch, fallbackCues, {
             title: `Video ${idToFetch}`,
             originalUrl: currentUrl,
@@ -695,6 +686,16 @@ export default function App() {
     setFetchError(null);
     setSharedLinkComplaint(null);
 
+    if (item.targetLanguages && item.targetLanguages.length > 0) {
+      saveVideoSettings(item.id, {
+        targetLanguages: item.targetLanguages,
+        ttsRates: item.ttsRates,
+        playOrder: item.playOrder,
+        sourceLang: item.sourceLang,
+        activeTargetLang: item.activeTargetLang,
+      });
+    }
+
     if (item.cues && item.cues.length > 0) {
       setCustomCues(item.cues);
       saveCachedSubtitles(item.id, item.cues, {
@@ -713,14 +714,37 @@ export default function App() {
     }
   };
 
+  const handleUpdateVideoSettings = (vid: string, newSettings: Partial<VideoSpecificSettings>) => {
+    setLibrary((prev) =>
+      prev.map((item) =>
+        item.id === vid
+          ? {
+              ...item,
+              targetLanguages: newSettings.targetLanguages || item.targetLanguages,
+              ttsRates: newSettings.ttsRates || item.ttsRates,
+              playOrder: newSettings.playOrder || item.playOrder,
+              sourceLang: newSettings.sourceLang || item.sourceLang,
+              activeTargetLang: newSettings.activeTargetLang || item.activeTargetLang,
+            }
+          : item
+      )
+    );
+  };
+
   const handleSaveCurrentToLibrary = (title: string) => {
     const active = customCues && customCues.length > 0 ? customCues : (interceptedData?.cues || []);
+    const vSettings = loadVideoSettings(videoId);
     const newItem: LibraryVideoItem = {
       id: videoId,
       originalUrl: currentUrl,
       title: title || `Video ${videoId}`,
       cues: active,
       timestamp: Date.now(),
+      targetLanguages: vSettings?.targetLanguages,
+      ttsRates: vSettings?.ttsRates,
+      playOrder: vSettings?.playOrder,
+      sourceLang: vSettings?.sourceLang,
+      activeTargetLang: vSettings?.activeTargetLang,
     };
 
     saveCachedSubtitles(videoId, active, { title: newItem.title, originalUrl: currentUrl });
@@ -888,6 +912,7 @@ export default function App() {
             playerRef={playerRef}
             observedTimedTextUrl={observedTimedTextUrl}
             videoId={videoId}
+            onUpdateVideoSettings={handleUpdateVideoSettings}
             onUpdateObservedTimedTextUrl={(newUrl) => {
               saveObservedTimedTextUrl(videoId, newUrl);
               setObservedTimedTextUrl(newUrl);

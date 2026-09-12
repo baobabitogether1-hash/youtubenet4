@@ -244,12 +244,17 @@ export async function fetchYouTubeNativeTranslation({
           if (parsed.cues && parsed.cues.length > 0) {
             console.log(`[Translation] Android Shell client succeeded: ${parsed.cues.length} cues for ${cleanLang} (format: ${parsed.format})!`);
             const modifiedUrl = activeObservedUrl ? buildYouTubeTranslatedTimedTextUrl(activeObservedUrl, cleanLang, fmt) : undefined;
+            const transMap: Record<string, string> = {};
+            parsed.cues.forEach((c) => {
+              if (c.id && c.text) transMap[c.id] = c.text;
+            });
             return {
               success: true,
               source: 'youtube_native_android',
               targetLang: cleanLang,
               format: parsed.format,
               cues: parsed.cues,
+              translations: transMap,
               modifiedUrl,
             };
           }
@@ -291,12 +296,17 @@ export async function fetchYouTubeNativeTranslation({
               const parsed = parseRawCaptionData(rawText);
               if (parsed.cues && parsed.cues.length > 0) {
                 console.log(`[Translation] Client browser direct fetch SUCCESS: ${parsed.cues.length} cues for ${cleanLang} (format: ${parsed.format})!`);
+                const transMap: Record<string, string> = {};
+                parsed.cues.forEach((c) => {
+                  if (c.id && c.text) transMap[c.id] = c.text;
+                });
                 return {
                   success: true,
                   source: 'youtube_native_client',
                   targetLang: cleanLang,
                   format: parsed.format,
                   cues: parsed.cues,
+                  translations: transMap,
                   modifiedUrl: directUrl,
                 };
               }
@@ -328,12 +338,17 @@ export async function fetchYouTubeNativeTranslation({
               const parsed = parseRawCaptionData(raw);
               if (parsed.cues && parsed.cues.length > 0) {
                 saveObservedTimedTextUrl(videoId, candUrl);
+                const transMap: Record<string, string> = {};
+                parsed.cues.forEach((c) => {
+                  if (c.id && c.text) transMap[c.id] = c.text;
+                });
                 return {
                   success: true,
                   source: 'youtube_native_client',
                   targetLang: cleanLang,
                   format: parsed.format,
                   cues: parsed.cues,
+                  translations: transMap,
                   modifiedUrl: candUrl,
                 };
               }
@@ -363,12 +378,17 @@ export async function fetchYouTubeNativeTranslation({
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.cues) && data.cues.length > 0) {
+        const transMap: Record<string, string> = {};
+        data.cues.forEach((c: any) => {
+          if (c.id && c.text) transMap[c.id] = c.text;
+        });
         return {
           success: true,
           source: 'youtube_native',
           targetLang: cleanLang,
           format: data.format,
           cues: data.cues,
+          translations: transMap,
           modifiedUrl: data.modifiedUrl,
         };
       }
