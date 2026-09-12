@@ -173,11 +173,13 @@ jobs:
           script: |
             adb devices
             adb install -r android-shell/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -n com.ytviewer.app/.MainActivity
+            adb shell am start -n com.ytviewer.app/.MainActivity -d "https://www.youtube.com/watch?v=HGEyIt2bMiE"
             sleep 8
             adb shell dumpsys activity com.ytviewer.app
             adb shell screencap -p /sdcard/screen.png
             adb pull /sdcard/screen.png ./android-emulator-screenshot.png
+            adb logcat -d -s "YT_CAPTION_INTERCEPTOR" "TTS_ENGINE" "ActivityTaskManager" | tail -n 60 > ./android-emulator-logcat.txt || true
+            node scripts/generate-android-report.mjs
             echo "Android Native Shell APK successfully booted and verified on Android Emulator (Option C)!"
 
       - name: Upload Android Emulator Artifacts
@@ -187,6 +189,9 @@ jobs:
           name: android-emulator-artifacts
           path: |
             android-emulator-screenshot.png
+            android-emulator-report.html
+            android-emulator-logcat.txt
+            cypress/reports/android-emulator-report.html
             android-shell/app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
           retention-days: 14

@@ -744,6 +744,12 @@
       <button class="nav-btn" id="btn-view-mochawesome" onclick="setMainView('mochawesome')">
         <span>📋</span> Mochawesome
       </button>
+      <button class="nav-btn" id="btn-view-android" onclick="setMainView('android')">
+        <span>📱</span> Android Emulator
+      </button>
+      <a href="android-emulator-report.html" class="nav-btn" target="_blank" title="Open full Android Emulator Report">
+        <span>↗</span> Android Report
+      </a>
       <a href="playwright/index.html" class="nav-btn" target="_blank">
         <span>🔍</span> Playwright Trace
       </a>
@@ -1060,6 +1066,11 @@
           <iframe src="mochawesome.html" title="Mochawesome Test Suite Report"></iframe>
         </div>
 
+        <!-- ANDROID EMULATOR VIEW PANEL -->
+        <div class="mochawesome-panel" id="android-panel" style="display: none;">
+          <iframe src="android-emulator-report.html" title="Android Emulator E2E Report"></iframe>
+        </div>
+
       </div>
     </section>
   </main>
@@ -1082,17 +1093,20 @@
       const snapshotPanel = document.getElementById('snapshot-panel');
       const videoPanel = document.getElementById('video-panel');
       const mochawesomePanel = document.getElementById('mochawesome-panel');
+      const androidPanel = document.getElementById('android-panel');
 
       if (view === 'runner') {
         document.getElementById('btn-view-runner').classList.add('active');
         snapshotPanel.style.display = 'flex';
         videoPanel.style.display = 'none';
         mochawesomePanel.style.display = 'none';
+        if (androidPanel) androidPanel.style.display = 'none';
       } else if (view === 'video') {
         document.getElementById('btn-view-video').classList.add('active');
         snapshotPanel.style.display = 'none';
         videoPanel.style.display = 'flex';
         mochawesomePanel.style.display = 'none';
+        if (androidPanel) androidPanel.style.display = 'none';
         const vid = document.getElementById('cypress-main-video');
         vid.play().catch(() => {});
       } else if (view === 'mochawesome') {
@@ -1100,6 +1114,14 @@
         snapshotPanel.style.display = 'none';
         videoPanel.style.display = 'none';
         mochawesomePanel.style.display = 'block';
+        if (androidPanel) androidPanel.style.display = 'none';
+      } else if (view === 'android') {
+        const btnAndroid = document.getElementById('btn-view-android');
+        if (btnAndroid) btnAndroid.classList.add('active');
+        snapshotPanel.style.display = 'none';
+        videoPanel.style.display = 'none';
+        mochawesomePanel.style.display = 'none';
+        if (androidPanel) androidPanel.style.display = 'block';
       }
     }
 

@@ -79,6 +79,24 @@ function scanScreenshots(dir) {
 }
 scanScreenshots(cypressScreenshotsDir);
 
+// 3b. Check and synchronize Android Emulator screenshots and report
+const rootEmulatorScreenshot = path.join(rootDir, 'android-emulator-screenshot.png');
+const targetEmulatorScreenshot = path.join(assetsDir, 'android-emulator-screenshot.png');
+if (fs.existsSync(rootEmulatorScreenshot)) {
+  fs.copyFileSync(rootEmulatorScreenshot, targetEmulatorScreenshot);
+  console.log('Copied Android emulator screenshot to assets/android-emulator-screenshot.png');
+}
+
+// Ensure Android Emulator HTML report is generated and present
+const androidScriptPath = path.join(rootDir, 'scripts', 'generate-android-report.mjs');
+if (fs.existsSync(androidScriptPath)) {
+  try {
+    import('./generate-android-report.mjs');
+  } catch (e) {
+    console.error('Failed to run generate-android-report.mjs dynamically', e);
+  }
+}
+
 // 4. Copy Playwright HTML report into cypress/reports/playwright
 const playwrightReportDir = path.join(rootDir, 'playwright-report');
 if (fs.existsSync(playwrightReportDir)) {
