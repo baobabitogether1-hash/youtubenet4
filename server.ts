@@ -96,6 +96,66 @@ async function startServer() {
     }
   });
 
+  // Check for newer YouTube-Viewer-debug.apk release
+  let apkReleaseCache: { data: any; timestamp: number } | null = null;
+  app.get('/api/check-apk-update', async (req, res) => {
+    try {
+      const repo = (req.query.repo as string) || 'baobabitogether1-hash/youtubenet4';
+      const now = Date.now();
+      if (apkReleaseCache && now - apkReleaseCache.timestamp < 60000 && !req.query.force) {
+        return res.json(apkReleaseCache.data);
+      }
+
+      const response = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+        headers: {
+          'User-Agent': 'YouTubeViewer-App/1.0',
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: `GitHub API returned ${response.status}`,
+          repo,
+        });
+      }
+
+      const releases = (await response.json()) as any[];
+      if (!Array.isArray(releases) || releases.length === 0) {
+        return res.status(404).json({ error: 'No releases found', repo });
+      }
+
+      for (const release of releases) {
+        const apkAsset = release.assets?.find((a: any) =>
+          a.name.toLowerCase().includes('youtube-viewer-debug.apk') ||
+          a.name.toLowerCase().endsWith('.apk')
+        );
+        if (apkAsset) {
+          const result = {
+            success: true,
+            tagName: release.tag_name,
+            name: release.name || release.tag_name,
+            publishedAt: release.published_at,
+            body: release.body || '',
+            htmlUrl: release.html_url,
+            asset: {
+              name: apkAsset.name,
+              size: apkAsset.size,
+              downloadUrl: apkAsset.browser_download_url,
+            },
+          };
+          apkReleaseCache = { data: result, timestamp: now };
+          return res.json(result);
+        }
+      }
+
+      return res.status(404).json({ error: 'No APK assets found in recent releases', repo });
+    } catch (err: any) {
+      console.error('[Server] Error checking APK update:', err);
+      return res.status(500).json({ error: err.message || 'Failed to check APK updates' });
+    }
+  });
+
   // Repeat observed YouTube timedtext request with target language (tlang) and format (fmt=srt or json3)
   app.post('/api/youtube-timedtext-translate', async (req, res) => {
     try {

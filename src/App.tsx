@@ -51,6 +51,8 @@ import { trackNetworkRequest } from './utils/networkInterceptor';
 import { ShieldAlert, CheckCircle2, Subtitles, X, RefreshCw } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { ActivityLogModal } from './components/ActivityLogModal';
+import { ApkUpdateModal } from './components/ApkUpdateModal';
+import { checkApkUpdate } from './utils/apkUpdater';
 import { loadAppSettings, saveAppSettings, AppSettings, DEFAULT_APP_SETTINGS } from './utils/appSettings';
 import { logInfo, logWarn, logSubtitles } from './utils/logBuffer';
 import { getMockedSubtitlesForVideo } from '../test/fixtures/defaultSubtitles';
@@ -121,9 +123,26 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState<boolean>(false);
+  const [isApkUpdateModalOpen, setIsApkUpdateModalOpen] = useState<boolean>(false);
+  const [hasApkUpdate, setHasApkUpdate] = useState<boolean>(false);
+  const [latestApkTag, setLatestApkTag] = useState<string | undefined>(undefined);
   const [settings, setSettings] = useState<AppSettings>(() => loadAppSettings());
   const [interceptedData, setInterceptedData] = useState<InterceptedCaptionData | null>(null);
   const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(true);
+
+  // Background check for newer APK version
+  useEffect(() => {
+    checkApkUpdate()
+      .then((info) => {
+        if (info.isNewer) {
+          setHasApkUpdate(true);
+          setLatestApkTag(info.tagName);
+        }
+      })
+      .catch(() => {
+        // Silently catch background network errors
+      });
+  }, []);
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -726,6 +745,9 @@ export default function App() {
         onOpenShare={() => setIsShareModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenLogs={() => setIsLogsModalOpen(true)}
+        onOpenApkUpdate={() => setIsApkUpdateModalOpen(true)}
+        hasApkUpdate={hasApkUpdate}
+        latestApkVersion={latestApkTag}
         settings={settings}
       />
 
@@ -930,6 +952,13 @@ export default function App() {
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
         onResetSettings={handleResetSettings}
+        onOpenApkUpdate={() => setIsApkUpdateModalOpen(true)}
+      />
+
+      {/* APK Update & In-App Installation Modal */}
+      <ApkUpdateModal
+        isOpen={isApkUpdateModalOpen}
+        onClose={() => setIsApkUpdateModalOpen(false)}
       />
 
       {/* Real-time Web Network Traffic Inspector (if enabled in settings) */}

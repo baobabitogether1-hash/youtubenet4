@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Youtube, Subtitles, Share2, Activity, AlertTriangle, Settings, Terminal, Copy, Check } from 'lucide-react';
+import { Youtube, Subtitles, Share2, Activity, AlertTriangle, Settings, Terminal, Copy, Check, Smartphone, Download } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setNetworkInspectorOpen } from '../store/networkSlice';
 import { setInspectorOpen } from '../store/errorsSlice';
@@ -12,6 +12,9 @@ interface NavbarProps {
   onOpenShare?: () => void;
   onOpenSettings?: () => void;
   onOpenLogs?: () => void;
+  onOpenApkUpdate?: () => void;
+  hasApkUpdate?: boolean;
+  latestApkVersion?: string;
   settings?: AppSettings;
 }
 
@@ -21,6 +24,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenShare,
   onOpenSettings,
   onOpenLogs,
+  onOpenApkUpdate,
+  hasApkUpdate = false,
+  latestApkVersion,
   settings,
 }) => {
   const dispatch = useAppDispatch();
@@ -112,6 +118,38 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Settings className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden sm:inline">Settings</span>
+            </button>
+          )}
+
+          {/* Check APK Update & Install via App Button */}
+          {onOpenApkUpdate && (
+            <button
+              type="button"
+              id="navbar-apk-update-button"
+              data-testid="navbar-apk-update-button"
+              onClick={onOpenApkUpdate}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition active:scale-95 ${
+                hasApkUpdate
+                  ? 'border-emerald-600 bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 shadow-sm animate-pulse'
+                  : 'border-neutral-700 bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200'
+              }`}
+              title={
+                hasApkUpdate
+                  ? `Update Available: ${latestApkVersion || 'Newer APK'}! Click to install.`
+                  : 'Check for newer YouTube-Viewer-debug.apk and install via app'
+              }
+            >
+              <Smartphone className={`w-3.5 h-3.5 ${hasApkUpdate ? 'text-emerald-400' : 'text-neutral-400'}`} />
+              <span className="hidden sm:inline">APK</span>
+              {hasApkUpdate ? (
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-neutral-950 text-[10px] font-bold">
+                  {latestApkVersion || 'New'}
+                </span>
+              ) : (
+                <span className="text-[10px] text-neutral-400 font-mono hidden md:inline">
+                  v1.0.13
+                </span>
+              )}
             </button>
           )}
 

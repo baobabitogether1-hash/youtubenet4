@@ -12,6 +12,9 @@ import {
   Radio,
   HardDrive,
   Cpu,
+  Smartphone,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -20,6 +23,7 @@ interface SettingsModalProps {
   settings: AppSettings;
   onUpdateSettings: (newSettings: AppSettings) => void;
   onResetSettings: () => void;
+  onOpenApkUpdate?: () => void;
 }
 
 export function SettingsModal({
@@ -28,6 +32,7 @@ export function SettingsModal({
   settings,
   onUpdateSettings,
   onResetSettings,
+  onOpenApkUpdate,
 }: SettingsModalProps) {
   if (!isOpen) return null;
 
@@ -320,6 +325,48 @@ export function SettingsModal({
                   className="w-4 h-4 accent-indigo-500 rounded"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Section 4: Android Shell APK & App Updates */}
+          <div className="space-y-3 pt-2 border-t border-neutral-800/80">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-emerald-400" />
+                <span>Android Shell APK &amp; App Updates</span>
+              </h3>
+              <span className="text-[11px] px-2 py-0.5 rounded bg-neutral-800 text-emerald-300 font-mono font-bold">
+                Installed: v1.0.13
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <div className="font-medium text-xs sm:text-sm text-neutral-200 flex items-center gap-2">
+                  <span>YouTube-Viewer-debug.apk</span>
+                  <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-[10px] text-neutral-400 font-mono">
+                    GitHub Releases
+                  </span>
+                </div>
+                <div className="text-xs text-neutral-400 mt-0.5">
+                  Check if a newer APK build is available and install directly via the in-app installer.
+                </div>
+              </div>
+
+              {onOpenApkUpdate && (
+                <button
+                  type="button"
+                  id="settings-check-apk-button"
+                  onClick={() => {
+                    onClose();
+                    onOpenApkUpdate();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition active:scale-95 shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Check &amp; Install APK</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
