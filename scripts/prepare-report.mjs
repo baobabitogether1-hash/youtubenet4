@@ -91,7 +91,7 @@ if (fs.existsSync(rootEmulatorScreenshot)) {
 const androidScriptPath = path.join(rootDir, 'scripts', 'generate-android-report.mjs');
 if (fs.existsSync(androidScriptPath)) {
   try {
-    import('./generate-android-report.mjs');
+    await import('./generate-android-report.mjs');
   } catch (e) {
     console.error('Failed to run generate-android-report.mjs dynamically', e);
   }
@@ -124,9 +124,24 @@ if (!fs.existsSync(mochawesomeHtmlPath)) {
     .test-item { border-top: 1px solid #334155; padding: 1rem 0; }
     .test-title { font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
     .test-pass { color: #10b981; }
+    .top-nav { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 0.75rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid #334155; flex-wrap: wrap; gap: 0.75rem; }
+    .nav-btn-link { text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.35rem; }
   </style>
 </head>
 <body>
+  <!-- TOP NAV BAR -->
+  <div class="top-nav">
+    <div style="font-weight: 700; font-size: 0.95rem; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem;">
+      <span>🎬</span> YouTube Viewer Test Reports
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <a href="./" class="nav-btn-link" style="color: #38bdf8; border: 1px solid #38bdf8; background: rgba(56,189,248,0.1);">⚡ Cypress Runner</a>
+      <a href="android-emulator-report.html" class="nav-btn-link" style="color: #10b981; border: 1px solid #10b981; background: rgba(16,185,129,0.1);">📱 Android Emulator Report</a>
+      <a href="./#android" class="nav-btn-link" style="color: #a855f7; border: 1px solid #a855f7; background: rgba(168,85,247,0.1);">📱 Emulation in Runner</a>
+      <a href="playwright/index.html" target="_blank" class="nav-btn-link" style="color: #94a3b8; border: 1px solid #475569; background: rgba(255,255,255,0.05);">🔍 Playwright Trace</a>
+    </div>
+  </div>
+
   <h1><span>⚡</span> Cypress Mochawesome Suite Report</h1>
   <div class="grid">
     <div class="card">
@@ -185,22 +200,27 @@ if (fs.existsSync(runnerTemplatePath)) {
   console.log('Generated fallback index.html');
 }
 
-// 8. Create 404.html fallback to redirect to index.html or mochawesome.html
+// 8. Create 404.html fallback to redirect to index.html, mochawesome.html, or android-emulator-report.html
 const notFoundHtmlPath = path.join(reportsDir, '404.html');
 const notFoundContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Redirecting to Cypress E2E Report...</title>
+  <title>Redirecting to E2E Test Reports...</title>
   <meta http-equiv="refresh" content="0; url=./">
   <script>
     const target = window.location.pathname.endsWith('/') ? './index.html' : './';
     window.location.replace(target);
   </script>
 </head>
-<body style="background:#171923;color:#f7fafc;font-family:sans-serif;padding:2rem;">
-  <h2>Redirecting to Cypress Test Runner...</h2>
-  <p>If not redirected automatically, <a href="./" style="color:#63b3ed;">click here to view the Cypress E2E Presentation</a> or <a href="./mochawesome.html" style="color:#63b3ed;">Mochawesome Report</a>.</p>
+<body style="background:#090d16;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:2.5rem;max-width:700px;margin:0 auto;line-height:1.6;">
+  <h2 style="color:#38bdf8;margin-bottom:0.75rem;">🎬 YouTube Viewer — E2E Test Reports</h2>
+  <p style="color:#94a3b8;">Redirecting to the interactive Cypress Test Runner...</p>
+  <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+    <a href="./" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;text-decoration:none;border-radius:8px;font-weight:600;">⚡ Interactive Cypress Runner (with Android Tab)</a>
+    <a href="./android-emulator-report.html" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #10b981;color:#10b981;text-decoration:none;border-radius:8px;font-weight:600;">📱 Android Native Shell (Option C) Emulator Report</a>
+    <a href="./mochawesome.html" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #334155;color:#f8fafc;text-decoration:none;border-radius:8px;font-weight:600;">📋 Standalone Mochawesome Summary Report</a>
+  </div>
 </body>
 </html>`;
 fs.writeFileSync(notFoundHtmlPath, notFoundContent, 'utf8');

@@ -15,9 +15,24 @@
     .test-item { border-top: 1px solid #334155; padding: 1rem 0; }
     .test-title { font-weight: 600; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
     .test-pass { color: #10b981; }
+    .top-nav { display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 0.75rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid #334155; flex-wrap: wrap; gap: 0.75rem; }
+    .nav-btn-link { text-decoration: none; font-size: 0.8rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.35rem; }
   </style>
 </head>
 <body>
+  <!-- TOP NAV BAR -->
+  <div class="top-nav">
+    <div style="font-weight: 700; font-size: 0.95rem; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem;">
+      <span>🎬</span> YouTube Viewer Test Reports
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <a href="./" class="nav-btn-link" style="color: #38bdf8; border: 1px solid #38bdf8; background: rgba(56,189,248,0.1);">⚡ Cypress Runner</a>
+      <a href="android-emulator-report.html" class="nav-btn-link" style="color: #10b981; border: 1px solid #10b981; background: rgba(16,185,129,0.1);">📱 Android Emulator Report</a>
+      <a href="./#android" class="nav-btn-link" style="color: #a855f7; border: 1px solid #a855f7; background: rgba(168,85,247,0.1);">📱 Emulation in Runner</a>
+      <a href="playwright/index.html" target="_blank" class="nav-btn-link" style="color: #94a3b8; border: 1px solid #475569; background: rgba(255,255,255,0.05);">🔍 Playwright Trace</a>
+    </div>
+  </div>
+
   <h1><span>⚡</span> Cypress Mochawesome Suite Report</h1>
   <div class="grid">
     <div class="card">
