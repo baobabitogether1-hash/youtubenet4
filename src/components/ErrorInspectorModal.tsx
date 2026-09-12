@@ -27,7 +27,6 @@ import {
   addError,
 } from '../store/errorsSlice';
 import { transition, clearActionAuditTrail } from '../store/stateMachineSlice';
-import { resetLoopGuard } from '../store/videoSlice';
 import { ErrorSection } from '../store/types';
 
 export const ErrorInspectorModal: React.FC = () => {
@@ -444,40 +443,19 @@ export const ErrorInspectorModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Redux Video Operation & Loop Monitor */}
+            {/* Redux Video Operation & History Monitor */}
             <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-2">
                   <PlaySquare className="w-4 h-4 text-emerald-400" />
-                  <span>Redux Video Operation & Loop Monitor</span>
+                  <span>Redux Video State & History Monitor</span>
                 </span>
                 <div className="flex items-center gap-2">
-                  {videoState.isLoopBlocked ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
-                      LOOP BLOCKED ({videoState.loopProtectionBlockedCount})
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60">
-                      Normal (Updates: {videoState.updateCount})
-                    </span>
-                  )}
-                  {videoState.isLoopBlocked && (
-                    <button
-                      type="button"
-                      onClick={() => dispatch(resetLoopGuard())}
-                      className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500 hover:bg-amber-400 text-neutral-950 transition"
-                    >
-                      Reset Guard
-                    </button>
-                  )}
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60">
+                    Active Video (Updates: {videoState.updateCount})
+                  </span>
                 </div>
               </div>
-
-              {videoState.loopWarning && (
-                <div className="p-2.5 rounded-lg bg-amber-950/50 border border-amber-800/60 text-amber-200 text-xs font-mono">
-                  ⚠️ {videoState.loopWarning}
-                </div>
-              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
                 <div className="p-2 rounded bg-neutral-900 border border-neutral-800">

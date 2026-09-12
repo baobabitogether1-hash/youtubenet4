@@ -9,6 +9,12 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:cy": "cypress run",
+    "test:cy:open": "cypress open",
+    "test:cy:report": "cypress run --reporter cypress-mochawesome-reporter",
+    "test:android": "bash scripts/run-android-e2e.sh",
+    "test:android:report": "node scripts/generate-android-report.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
@@ -17,6 +23,7 @@
     "@reduxjs/toolkit": "^2.12.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "cypress-mochawesome-reporter": "^5.0.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "jszip": "^3.10.1",
@@ -33,11 +40,19 @@
     "@types/jszip": "^3.4.1",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "cypress": "^16.0.0",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
     "vite-plugin-pwa": "^1.3.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.34.8",
+    "@rollup/rollup-linux-x64-gnu": "^4.34.8",
+    "lightningcss-darwin-arm64": "^1.32.0",
+    "lightningcss-linux-x64-gnu": "^1.32.0",
+    "@tailwindcss/oxide-darwin-arm64": "^4.1.14"
   }
 }

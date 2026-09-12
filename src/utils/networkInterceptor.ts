@@ -5,6 +5,7 @@ import {
   recordRequestFailed,
 } from '../store/networkSlice';
 import { addError } from '../store/errorsSlice';
+import { logNetwork, logError } from './logBuffer';
 
 let isInterceptorInitialized = false;
 
@@ -19,6 +20,7 @@ export function trackNetworkRequest(
   requestBody?: any
 ) {
   const id = `manual-net-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const startTime = Date.now();
   store.dispatch(
     recordRequestStart({
       id,
@@ -32,22 +34,43 @@ export function trackNetworkRequest(
   return {
     id,
     complete: (status: number, responseBody?: any, headers?: Record<string, string>) => {
+      const duration = Date.now() - startTime;
       store.dispatch(
         recordRequestComplete({
           id,
           status,
           responseBody,
           responseHeaders: headers,
+          duration,
         })
       );
+      logNetwork({
+        category: type,
+        url,
+        method,
+        status,
+        duration,
+        responseBody,
+        message: `${method} ${url} completed (${status})`,
+      });
     },
     fail: (error: string) => {
+      const duration = Date.now() - startTime;
       store.dispatch(
         recordRequestFailed({
           id,
           error,
+          duration,
         })
       );
+      logNetwork({
+        category: type,
+        url,
+        method,
+        status: 0,
+        duration,
+        message: `${method} ${url} failed: ${error}`,
+      });
     },
   };
 }
@@ -121,8 +144,7 @@ export function initGlobalNetworkAndErrorInterceptors() {
             try {
               parsedBody = JSON.parse(init.body);
             } catch {
-              parsedBody =
-                init.body.length > 500 ? init.body.substring(0, 500) + '...' : init.body;
+              parsedBody = init.body;
             }
           }
         } catch {}
@@ -174,8 +196,7 @@ export function initGlobalNetworkAndErrorInterceptors() {
               try {
                 responseBody = JSON.parse(text);
               } catch {
-                responseBody =
-                  text.length > 1000 ? text.substring(0, 1000) + '... (truncated)' : text;
+                responseBody = text;
               }
             } catch {
               responseBody = '[Binary or Unreadable Body]';
@@ -308,7 +329,7 @@ export function initGlobalNetworkAndErrorInterceptors() {
               url,
               method,
               type: 'xhr',
-              requestBody: typeof body === 'string' ? body.substring(0, 300) : undefined,
+              requestBody: typeof body === 'string' ? body : undefined,
             })
           );
 
@@ -318,8 +339,8 @@ export function initGlobalNetworkAndErrorInterceptors() {
             try {
               respBody =
                 typeof this.response === 'string'
-                  ? this.response.substring(0, 500)
-                  : '[Binary/Object]';
+                  ? this.response
+                  : (this.responseText || '[Binary/Object]');
             } catch {}
 
             store.dispatch(

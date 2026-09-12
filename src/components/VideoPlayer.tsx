@@ -54,12 +54,11 @@ export const VideoPlayer = forwardRef<YouTubePlayerHandle, VideoPlayerProps>(
     const dispatch = useAppDispatch();
     const [localCaptionsEnabled, setLocalCaptionsEnabled] = useState(controlledCaptionsEnabled ?? false);
     const captionsActive = controlledCaptionsEnabled !== undefined ? controlledCaptionsEnabled : localCaptionsEnabled;
+    const isCaptionsActive = Boolean(captionsActive || hasSubtitles);
 
     const handleToggleCaptions = () => {
-      const nextState = !captionsActive;
-      if (controlledCaptionsEnabled === undefined) {
-        setLocalCaptionsEnabled(nextState);
-      }
+      const nextState = !isCaptionsActive;
+      setLocalCaptionsEnabled(nextState);
       onToggleCaptions?.(nextState);
 
       // Requirement 4: Auto-detect subtitles once the caption icon is set to ON
@@ -395,18 +394,18 @@ export const VideoPlayer = forwardRef<YouTubePlayerHandle, VideoPlayerProps>(
                 type="button"
                 onClick={handleToggleCaptions}
                 disabled={isFetchingSubtitles}
-                aria-pressed={captionsActive}
+                aria-pressed={isCaptionsActive ? 'true' : 'false'}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 ${
                   hasSubtitles
                     ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700/70 hover:bg-emerald-900/80 shadow-sm shadow-emerald-900/20'
                     : isFetchingSubtitles
                     ? 'bg-amber-950/70 text-amber-300 border-amber-700/70 animate-pulse'
-                    : captionsActive
+                    : isCaptionsActive
                     ? 'bg-blue-900/60 text-blue-200 border-blue-600 hover:bg-blue-800'
                     : 'bg-red-600 hover:bg-red-500 text-white border-red-500 shadow-sm shadow-red-600/20'
                 }`}
                 title={
-                  captionsActive
+                  isCaptionsActive
                     ? 'Captions are ON (Click to toggle)'
                     : 'Turn captions ON to auto-detect subtitles'
                 }
@@ -414,14 +413,14 @@ export const VideoPlayer = forwardRef<YouTubePlayerHandle, VideoPlayerProps>(
                 {isFetchingSubtitles ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Subtitles className={`w-3.5 h-3.5 ${captionsActive ? 'text-emerald-300' : ''}`} />
+                  <Subtitles className={`w-3.5 h-3.5 ${isCaptionsActive ? 'text-emerald-300' : ''}`} />
                 )}
                 <span>
                   {isFetchingSubtitles
                     ? 'Detecting Subtitles...'
                     : hasSubtitles
                     ? 'Captions: ON'
-                    : captionsActive
+                    : isCaptionsActive
                     ? 'Captions: ON (Auto-Detect)'
                     : 'Turn Captions ON'}
                 </span>

@@ -1,9 +1,30 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { NetworkRequestRecord } from './types';
+import { MAX_RESPONSE_BODY_LOG_CHARS } from '../utils/logBuffer';
+
+function truncateLogBody(body: any): any {
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === 'string') {
+    if (body.length > MAX_RESPONSE_BODY_LOG_CHARS) {
+      return `${body.substring(0, MAX_RESPONSE_BODY_LOG_CHARS)}... [truncated ${body.length - MAX_RESPONSE_BODY_LOG_CHARS} chars]`;
+    }
+    return body;
+  }
+  try {
+    const jsonStr = JSON.stringify(body);
+    if (jsonStr.length > MAX_RESPONSE_BODY_LOG_CHARS) {
+      return `${jsonStr.substring(0, MAX_RESPONSE_BODY_LOG_CHARS)}... [truncated ${jsonStr.length - MAX_RESPONSE_BODY_LOG_CHARS} chars]`;
+    }
+    return body;
+  } catch {
+    return '[Non-serializable body]';
+  }
+}
 
 interface NetworkSliceState {
   requests: NetworkRequestRecord[];
-  filterType: 'all' | 'timedtext' | 'api' | 'translation' | 'failed';
+  filterType: 'all' | 'timedtext' | 'api' | 'translation' | 'failed' | 'success';
+  excludeErrors: boolean;
   searchQuery: string;
   selectedRequestId: string | null;
   isInspectorOpen: boolean;
@@ -12,6 +33,7 @@ interface NetworkSliceState {
 const initialState: NetworkSliceState = {
   requests: [],
   filterType: 'all',
+  excludeErrors: false,
   searchQuery: '',
   selectedRequestId: null,
   isInspectorOpen: false,
@@ -39,11 +61,11 @@ export const networkSlice = createSlice({
         type: action.payload.type,
         startTime: Date.now(),
         requestHeaders: action.payload.requestHeaders,
-        requestBody: action.payload.requestBody,
+        requestBody: truncateLogBody(action.payload.requestBody),
         isPending: true,
       };
       state.requests.unshift(newRecord);
-      if (state.requests.length > 150) {
+      if (state.requests.length > 60) {
         state.requests.pop();
       }
     },
@@ -63,7 +85,7 @@ export const networkSlice = createSlice({
         req.status = action.payload.status;
         req.statusText = action.payload.statusText;
         req.responseHeaders = action.payload.responseHeaders;
-        req.responseBody = action.payload.responseBody;
+        req.responseBody = truncateLogBody(action.payload.responseBody);
         req.duration = action.payload.duration ?? (Date.now() - req.startTime);
         req.isPending = false;
       }
@@ -90,9 +112,15 @@ export const networkSlice = createSlice({
     },
     setFilterType: (
       state,
-      action: PayloadAction<'all' | 'timedtext' | 'api' | 'translation' | 'failed'>
+      action: PayloadAction<'all' | 'timedtext' | 'api' | 'translation' | 'failed' | 'success'>
     ) => {
       state.filterType = action.payload;
+    },
+    setExcludeErrors: (state, action: PayloadAction<boolean>) => {
+      state.excludeErrors = action.payload;
+    },
+    toggleExcludeErrors: (state) => {
+      state.excludeErrors = !state.excludeErrors;
     },
     setSearchQuery: (state, action: PayloadAction<string>) => {
       state.searchQuery = action.payload;
@@ -115,6 +143,8 @@ export const {
   recordRequestFailed,
   clearNetworkLogs,
   setFilterType,
+  setExcludeErrors,
+  toggleExcludeErrors,
   setSearchQuery,
   setSelectedRequestId,
   setNetworkInspectorOpen,

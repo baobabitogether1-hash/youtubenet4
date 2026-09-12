@@ -83,3 +83,38 @@ The application uses Redux Toolkit (`src/store/`):
 - The primary test is the **Caption Auto-Detection Test** (`e2e/app.spec.ts`).
 - When the caption icon / toggle is set to ON, the application must detect and load subtitles without mocking in real execution.
 - Non-essential tests should remain skipped (`test.skip`) to prevent false negatives in CI environments.
+
+---
+
+## 6. App Execution Strategy
+
+```yaml
+app_execution_strategy:
+  phase_1_observability_and_rate_control:
+    step_1_1_safe_logging:
+      description: Implement a fixed-size ring buffer for logs. Truncate response bodies to X characters ONLY within log entries to preserve app payload data. Ensure log copying reads directly from this buffer for guaranteed access.
+    step_1_2_loop_and_resource_detection:
+      description: Add counters and rate caps for each Redux action and API request type to throttle operations, detect infinite loops, and prevent resource exhaustion.
+  phase_2_platform_separation_and_data_setup:
+    step_2_1_web_testing_setup:
+      description: Configure web platform to use mocked subtitle fixtures strictly. Disable native subtitle detection and fetching on web.
+    step_2_2_android_native_setup:
+      description: Set Android emulator as the dedicated platform for native subtitle detection, fetching, and captions-enabled integration.
+    step_2_3_fallback_and_manual_controls:
+      description: Disable automatic subtitle and translation fetching on boot. Require manual trigger buttons, enable fallback to default subtitles only, and set max retry limit to X=2.
+  phase_3_core_playback_loop:
+    step_3_1_sequential_switch_logic:
+      description: Implement an alternating playback sequence (play TTS for block, play video segment, play TTS for next block, play video segment) ensuring neither mode overlaps.
+    step_3_2_execution_validation:
+      description: Validate playback flow by executing single and consecutive multi-block transitions and logging each switch to the safe log buffer.
+  phase_4_e2e_verification_sequence:
+    step_4_1_android_native_captions:
+      description: Run E2E test on Android emulator to verify native subtitle detection using fixture https://www.youtube.com/watch?v=HGEyIt2bMiE with captions enabled.
+    step_4_2_playback_flow_integration:
+      description: Verify alternating TTS and video playback cycle on Android emulator.
+    step_4_3_android_target_language_switch:
+      description: Verify translation fetching on Android emulator by switching tlang to a target language.
+    step_4_4_web_translation_flow:
+      description: Verify on-demand Google Translation on web platform, strictly limited to the next X=4 subtitles.
+```
+
