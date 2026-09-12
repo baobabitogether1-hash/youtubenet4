@@ -13,12 +13,17 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   cypress-run:
     name: Cypress E2E Tests & Browsable Presentation
     runs-on: ubuntu-latest
     timeout-minutes: 4
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout Code
@@ -72,3 +77,21 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./cypress/reports
           publish_branch: gh_pages
+
+      - name: Setup GitHub Pages (Native Actions)
+        if: always()
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Upload GitHub Pages Artifact (Native Actions)
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
+        with:
+          path: ./cypress/reports
+
+      - name: Deploy to GitHub Pages (Native Actions)
+        id: deployment
+        if: always()
+        uses: actions/deploy-pages@v4
+        continue-on-error: true

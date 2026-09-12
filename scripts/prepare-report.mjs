@@ -146,4 +146,46 @@ if (!fs.existsSync(mochawesomeHtmlPath)) {
   console.log('Created standalone Mochawesome report at cypress/reports/mochawesome.html');
 }
 
+// 6. Ensure .nojekyll is present so GitHub Pages serves raw HTML and directories starting with _ or .
+const nojekyllPath = path.join(reportsDir, '.nojekyll');
+if (!fs.existsSync(nojekyllPath)) {
+  fs.writeFileSync(nojekyllPath, '', 'utf8');
+  console.log('Created .nojekyll file in cypress/reports/');
+}
+
+// 7. Ensure index.html is always present in cypress/reports for GitHub Pages root URLs
+const indexHtmlPath = path.join(reportsDir, 'index.html');
+const runnerTemplatePath = path.join(rootDir, 'cypress', 'runner-template.html');
+if (fs.existsSync(runnerTemplatePath)) {
+  fs.copyFileSync(runnerTemplatePath, indexHtmlPath);
+  console.log('Synchronized cypress/runner-template.html to cypress/reports/index.html');
+} else if (fs.existsSync(mochawesomeHtmlPath)) {
+  fs.copyFileSync(mochawesomeHtmlPath, indexHtmlPath);
+  console.log('Copied mochawesome.html to cypress/reports/index.html');
+} else if (!fs.existsSync(indexHtmlPath)) {
+  fs.writeFileSync(indexHtmlPath, mochawesomeTemplate, 'utf8');
+  console.log('Generated fallback index.html');
+}
+
+// 8. Create 404.html fallback to redirect to index.html or mochawesome.html
+const notFoundHtmlPath = path.join(reportsDir, '404.html');
+const notFoundContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting to Cypress E2E Report...</title>
+  <meta http-equiv="refresh" content="0; url=./">
+  <script>
+    const target = window.location.pathname.endsWith('/') ? './index.html' : './';
+    window.location.replace(target);
+  </script>
+</head>
+<body style="background:#171923;color:#f7fafc;font-family:sans-serif;padding:2rem;">
+  <h2>Redirecting to Cypress Test Runner...</h2>
+  <p>If not redirected automatically, <a href="./" style="color:#63b3ed;">click here to view the Cypress E2E Presentation</a> or <a href="./mochawesome.html" style="color:#63b3ed;">Mochawesome Report</a>.</p>
+</body>
+</html>`;
+fs.writeFileSync(notFoundHtmlPath, notFoundContent, 'utf8');
+console.log('Created 404.html fallback redirect.');
+
 console.log('Artifacts preparation successfully completed.');
