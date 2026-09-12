@@ -9,15 +9,35 @@
 
 set -uo pipefail
 
-REPO_OWNER="baobabitogether-a11y"
-REPO_NAME="youtubenet"
-VERSION="${1:-v1.0.5}"
+REPO_OWNER="baobabitogether1-hash"
+REPO_NAME="youtubenet4"
+ARG_INPUT="${1:-v1.0.13}"
 APK_NAME="YouTube-Viewer-debug.apk"
 PACKAGE_NAME="com.ytviewer.app"
 MAIN_ACTIVITY="com.ytviewer.app/.MainActivity"
 
 # ----------------------------------------------------------------------------
-# 1. Resolve Platform Paths (Git Bash on Windows vs macOS/Linux)
+# 1. Parse Input Argument (Full URL vs Tag/Version)
+# ----------------------------------------------------------------------------
+if [[ "${ARG_INPUT}" =~ ^https?:// ]]; then
+  DOWNLOAD_URL="${ARG_INPUT}"
+  # Extract version from URL if available, or extract file name
+  VERSION=$(echo "${ARG_INPUT}" | sed -E 's|.*/releases/download/([^/]+)/.*|\1|')
+  if [[ "${ARG_INPUT}" =~ /([^/]+\.apk)$ ]]; then
+    APK_NAME="${BASH_REMATCH[1]}"
+  fi
+  # Extract repo owner/name if from github releases
+  if [[ "${ARG_INPUT}" =~ github\.com/([^/]+)/([^/]+)/releases ]]; then
+    REPO_OWNER="${BASH_REMATCH[1]}"
+    REPO_NAME="${BASH_REMATCH[2]}"
+  fi
+else
+  VERSION="${ARG_INPUT}"
+  DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${APK_NAME}"
+fi
+
+# ----------------------------------------------------------------------------
+# 2. Resolve Platform Paths (Git Bash on Windows vs macOS/Linux)
 # ----------------------------------------------------------------------------
 if [[ "${OSTYPE:-}" == "msys"* || "${OSTYPE:-}" == "cygwin"* || "${OSTYPE:-}" == "win32"* ]]; then
   # On Windows Git Bash: normalize USERPROFILE to forward slashes for bash
@@ -30,7 +50,6 @@ fi
 
 mkdir -p "${DOWNLOAD_DIR}"
 APK_FILE="${DOWNLOAD_DIR}/${APK_NAME}"
-DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${APK_NAME}"
 
 # Compute a Windows-native path (e.g. C:\Users\User\Downloads\...) for adb.exe
 if command -v cygpath &> /dev/null; then
