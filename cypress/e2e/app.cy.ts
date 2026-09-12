@@ -16,7 +16,7 @@ describe('YouTube Video Viewer - Subtitle Detection (Step-by-Step)', () => {
       const isPressed = $btn.attr('aria-pressed');
       if (isPressed !== 'true') {
         cy.log('Step 2a: Clicking caption toggle icon to switch ON');
-        cy.wrap($btn).click();
+        cy.get('#caption-toggle-button').click();
       }
     });
     cy.screenshot('test1-step2', { capture: 'viewport', overwrite: true });
@@ -69,7 +69,7 @@ describe('YouTube Video Viewer - Subtitle Detection (Step-by-Step)', () => {
     cy.get('#caption-toggle-button').then(($btn) => {
       const isPressed = $btn.attr('aria-pressed');
       if (isPressed !== 'true') {
-        cy.wrap($btn).click();
+        cy.get('#caption-toggle-button').click();
       }
     });
     cy.get('#caption-toggle-button').should('have.attr', 'aria-pressed', 'true');

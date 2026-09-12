@@ -123,7 +123,7 @@ export default function App() {
   const [isLogsModalOpen, setIsLogsModalOpen] = useState<boolean>(false);
   const [settings, setSettings] = useState<AppSettings>(() => loadAppSettings());
   const [interceptedData, setInterceptedData] = useState<InterceptedCaptionData | null>(null);
-  const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(false);
+  const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(true);
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -361,6 +361,7 @@ export default function App() {
       const cached = getCachedSubtitles(idToFetch);
       if (cached && cached.length > 0) {
         setCustomCues(cached);
+        setCaptionsEnabled(true);
         setFetchError(null);
         setRestoredToast(`Restored ${cached.length} cached subtitles`);
         logSubtitles(`Restored ${cached.length} cached subtitles for ${idToFetch}`);
@@ -385,6 +386,7 @@ export default function App() {
       logSubtitles(`[WebPlatform] Using mocked subtitle fixtures for ${idToFetch}`);
       const mockedCues = getMockedSubtitlesForVideo(idToFetch);
       setCustomCues(mockedCues);
+      setCaptionsEnabled(true);
       saveCachedSubtitles(idToFetch, mockedCues, {
         title: `Video ${idToFetch}`,
         originalUrl: currentUrl,
@@ -627,16 +629,19 @@ export default function App() {
     const cached = getCachedSubtitles(newId);
     if (cached && cached.length > 0) {
       setCustomCues(cached);
+      setCaptionsEnabled(true);
       setRestoredToast(`Restored ${cached.length} cached subtitles`);
       setTimeout(() => setRestoredToast(null), 3000);
     } else {
       const libMatch = library.find((item) => item.id === newId);
       if (libMatch && libMatch.cues && libMatch.cues.length > 0) {
         setCustomCues(libMatch.cues);
+        setCaptionsEnabled(true);
         saveCachedSubtitles(newId, libMatch.cues);
       } else {
         setCustomCues(null);
         setInterceptedData(null);
+        setCaptionsEnabled(false);
       }
     }
   };
