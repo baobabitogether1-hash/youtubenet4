@@ -118,3 +118,57 @@ app_execution_strategy:
       description: Verify on-demand Google Translation on web platform, strictly limited to the next X=4 subtitles.
 ```
 
+---
+
+## 7. Android UI Design Guidelines
+
+```yaml
+android_ui:
+  principles:
+    - lightweight
+    - no_scrolling
+    - minimal_controls
+    - minimal_text
+    - simple_navigation
+    - user_respect
+
+  main_screen:
+    video:
+      display: full_screen
+      controls: show_on_tap
+    controls:
+      - play_pause
+      - back_close
+      - volume
+      - progress_bar
+      - settings
+
+  settings:
+    behavior:
+      pause_video_when_opened: true
+      use_simple_toggles: true
+      avoid_nested_menus: true
+      avoid_scrolling: true
+    feedback:
+      show_brief_confirmation: true
+
+  navigation:
+    prefer_single_screen: true
+    back_button: obvious
+
+  accessibility:
+    large_touch_targets: true
+    readable_contrast: true
+    screen_reader_support: true
+    icon_labels: true
+
+  avoid:
+    - unnecessary_controls
+    - excessive_text
+    - advertisements
+    - redundant_buttons
+    - decorative_elements
+    - unnecessary_animations
+```
+
+

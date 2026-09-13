@@ -26,8 +26,8 @@ export interface ApkReleaseInfo {
 }
 
 export const CURRENT_APK_VERSION = 'v1.0.13';
-export const DEFAULT_REPO = 'baobabitogether1-hash/youtubenet4';
-export const FALLBACK_REPO = 'mostuf2556/youtubenet5';
+export const DEFAULT_REPO = 'baobabitogether-a11y/youtubenet3';
+export const FALLBACK_REPO = 'baobabitogether1-hash/youtubenet4';
 
 /**
  * Format bytes to human readable format (MB/KB)
@@ -401,9 +401,9 @@ export function installApkViaApp(downloadUrl: string, fileName = 'YouTube-Viewer
  */
 export function getAdbCurlCommand(downloadUrl?: string): string {
   if (downloadUrl) {
-    return `curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash -s -- "${downloadUrl}"`;
+    return `curl -fsSL https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash -s -- "${downloadUrl}"`;
   }
-  return `curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash`;
+  return `curl -fsSL https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash`;
 }
 
 export function getBashScriptCommand(downloadUrl: string): string {

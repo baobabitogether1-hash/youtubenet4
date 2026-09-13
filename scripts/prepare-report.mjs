@@ -104,6 +104,14 @@ if (fs.existsSync(playwrightReportDir)) {
   console.log('Copied Playwright report to cypress/reports/playwright');
 }
 
+// 4b. Copy built web application into cypress/reports/app
+const distDir = path.join(rootDir, 'dist');
+const appDestDir = path.join(reportsDir, 'app');
+if (fs.existsSync(distDir)) {
+  fs.cpSync(distDir, appDestDir, { recursive: true });
+  console.log('Copied built web application to cypress/reports/app');
+}
+
 // 5. Generate Standalone Mochawesome HTML if not already created by reporter
 const mochawesomeHtmlPath = path.join(reportsDir, 'mochawesome.html');
 if (!fs.existsSync(mochawesomeHtmlPath)) {
@@ -139,6 +147,7 @@ if (!fs.existsSync(mochawesomeHtmlPath)) {
       <a href="android-emulator-report.html" class="nav-btn-link" style="color: #10b981; border: 1px solid #10b981; background: rgba(16,185,129,0.1);">📱 Android Emulator Report</a>
       <a href="./#android" class="nav-btn-link" style="color: #a855f7; border: 1px solid #a855f7; background: rgba(168,85,247,0.1);">📱 Emulation in Runner</a>
       <a href="playwright/index.html" target="_blank" class="nav-btn-link" style="color: #94a3b8; border: 1px solid #475569; background: rgba(255,255,255,0.05);">🔍 Playwright Trace</a>
+      <a href="app/index.html" target="_blank" class="nav-btn-link" style="color: #f59e0b; border: 1px solid #f59e0b; background: rgba(245,158,11,0.1);">🌐 Live Web App</a>
     </div>
   </div>
 
@@ -220,6 +229,7 @@ const notFoundContent = `<!DOCTYPE html>
     <a href="./" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;text-decoration:none;border-radius:8px;font-weight:600;">⚡ Interactive Cypress Runner (with Android Tab)</a>
     <a href="./android-emulator-report.html" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #10b981;color:#10b981;text-decoration:none;border-radius:8px;font-weight:600;">📱 Android Native Shell (Option C) Emulator Report</a>
     <a href="./mochawesome.html" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #334155;color:#f8fafc;text-decoration:none;border-radius:8px;font-weight:600;">📋 Standalone Mochawesome Summary Report</a>
+    <a href="./app/index.html" style="display:inline-block;padding:10px 16px;background:#1e293b;border:1px solid #f59e0b;color:#f59e0b;text-decoration:none;border-radius:8px;font-weight:600;">🌐 Launch Live Web Application</a>
   </div>
 </body>
 </html>`;

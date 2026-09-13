@@ -11,6 +11,10 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: e2e-gh-pages-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   pages: write
@@ -18,9 +22,9 @@ permissions:
 
 jobs:
   e2e-tests:
-    name: Run E2E Tests & Deploy Cypress Report
+    name: Run E2E Tests & Deploy GitHub Pages
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -78,37 +82,33 @@ jobs:
           path: cypress/reports/
           retention-days: 14
 
-      - name: Deploy Cypress Test Report to GitHub Pages (gh-pages)
-        if: always()
+      # Deploy to GitHub Pages:
+      # 1. Branch-based deployment to 'gh-pages' (compatible with 'Deploy from a branch' setting)
+      # 2. Native Actions deployment artifact (compatible with 'GitHub Actions' setting)
+      - name: Deploy to GitHub Pages (gh-pages branch)
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch') && !cancelled()
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./cypress/reports
           publish_branch: gh-pages
+          force_orphan: true
 
-      - name: Deploy Cypress Test Report to GitHub Pages (gh_pages)
-        if: always()
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./cypress/reports
-          publish_branch: gh_pages
-
-      - name: Setup GitHub Pages (Native Actions)
-        if: always()
+      - name: Setup GitHub Pages (Native Actions Mode)
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch') && !cancelled()
         uses: actions/configure-pages@v5
         continue-on-error: true
 
-      - name: Upload GitHub Pages Artifact (Native Actions)
-        if: always()
+      - name: Upload GitHub Pages Artifact (Native Actions Mode)
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch') && !cancelled()
         uses: actions/upload-pages-artifact@v3
         continue-on-error: true
         with:
           path: ./cypress/reports
 
-      - name: Deploy to GitHub Pages (Native Actions)
+      - name: Deploy to GitHub Pages (Native Actions Mode)
         id: deployment
-        if: always()
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch') && !cancelled()
         uses: actions/deploy-pages@v4
         continue-on-error: true
 

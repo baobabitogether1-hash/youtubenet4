@@ -195,7 +195,7 @@ async function startServer() {
   let apkReleaseCache: { data: any; timestamp: number } | null = null;
   app.get('/api/check-apk-update', async (req, res) => {
     try {
-      const repo = (req.query.repo as string) || 'baobabitogether1-hash/youtubenet4';
+      const repo = (req.query.repo as string) || 'baobabitogether-a11y/youtubenet3';
       const now = Date.now();
       if (apkReleaseCache && now - apkReleaseCache.timestamp < 60000 && !req.query.force) {
         return res.json(apkReleaseCache.data);

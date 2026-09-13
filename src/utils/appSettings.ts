@@ -5,6 +5,15 @@
  */
 
 export interface AppSettings {
+  // UI Display: Compact, lightweight view by default (Android UI Guidelines: no scrolling, minimal controls)
+  compactView: boolean;
+  showExpandedControls: boolean; // Allow user to show them by updating configuration
+  showTeacherPanel: boolean;
+  showLinkBar: boolean;
+
+  // General languages user wants to learn from as target for future translation
+  learningLanguages: string[];
+
   // Advanced Features (OFF by default)
   enableDiagnosticDock: boolean;
   enableNetworkInspector: boolean;
@@ -28,7 +37,31 @@ export interface AppSettings {
   maxRetries: number; // Max retry limit to X=2 (Step 2.3)
 }
 
+export const SUPPORTED_LANGUAGES_CATALOG: { code: string; name: string }[] = [
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'pl', name: 'Polish' },
+];
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  // Compact lightweight view: ON by default (fast, no scrolling, controls show on tap)
+  compactView: true,
+  showExpandedControls: false,
+  showTeacherPanel: false,
+  showLinkBar: false,
+
+  // General learning target languages list
+  learningLanguages: ['es', 'fr', 'de', 'ja'],
+
   // Advanced features: OFF by default
   enableDiagnosticDock: false,
   enableNetworkInspector: false,
@@ -132,4 +165,29 @@ export function saveVideoSettings(
     console.warn(`[AppSettings] Failed to save settings for video ${videoId}:`, err);
   }
 }
+
+export function getUserLearningLanguages(): string[] {
+  const current = loadAppSettings();
+  return current.learningLanguages && current.learningLanguages.length > 0
+    ? current.learningLanguages
+    : DEFAULT_APP_SETTINGS.learningLanguages;
+}
+
+export function setUserLearningLanguages(languages: string[]): void {
+  const current = loadAppSettings();
+  saveAppSettings({
+    ...current,
+    learningLanguages: languages,
+  });
+}
+
+export function getVideoTargetLang(videoId: string): string | null {
+  const settings = loadVideoSettings(videoId);
+  return settings?.activeTargetLang || null;
+}
+
+export function setVideoTargetLang(videoId: string, langCode: string): void {
+  saveVideoSettings(videoId, { activeTargetLang: langCode });
+}
+
 

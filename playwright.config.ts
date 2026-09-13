@@ -8,17 +8,17 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:3000',
-    video: {
-      mode: 'on',
-      size: { width: 1280, height: 720 }
-    },
+    video: 'off',
     trace: 'off',
     screenshot: 'on',
+    launchOptions: {
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    },
   },
   outputDir: 'test-results',
   webServer: {
-    command: 'npm run start',
-    port: 3000,
+    command: 'npm run dev',
+    url: 'http://127.0.0.1:3000',
     reuseExistingServer: true,
     timeout: 30000,
   },
@@ -28,10 +28,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
-        video: {
-          mode: 'on',
-          size: { width: 1280, height: 720 }
-        }
+        video: 'off',
       },
     },
   ],

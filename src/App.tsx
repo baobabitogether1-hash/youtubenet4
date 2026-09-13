@@ -53,9 +53,11 @@ import { SettingsModal } from './components/SettingsModal';
 import { ActivityLogModal } from './components/ActivityLogModal';
 import { ApkUpdateModal } from './components/ApkUpdateModal';
 import { checkApkUpdate } from './utils/apkUpdater';
-import { loadAppSettings, saveAppSettings, AppSettings, DEFAULT_APP_SETTINGS, loadVideoSettings, saveVideoSettings, VideoSpecificSettings } from './utils/appSettings';
+import { loadAppSettings, saveAppSettings, AppSettings, DEFAULT_APP_SETTINGS, loadVideoSettings, saveVideoSettings, VideoSpecificSettings, getVideoTargetLang, setVideoTargetLang } from './utils/appSettings';
 import { logInfo, logWarn, logSubtitles } from './utils/logBuffer';
 import { getMockedSubtitlesForVideo } from '../test/fixtures/defaultSubtitles';
+import { SelectTargetLanguageModal } from './components/SelectTargetLanguageModal';
+import { translateText } from './lib/translateService';
 
 const LIBRARY_STORAGE_KEY = 'yt_video_library_v2';
 
@@ -128,7 +130,43 @@ export default function App() {
   const [latestApkTag, setLatestApkTag] = useState<string | undefined>(undefined);
   const [settings, setSettings] = useState<AppSettings>(() => loadAppSettings());
   const [interceptedData, setInterceptedData] = useState<InterceptedCaptionData | null>(null);
-  const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(true);
+  const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(false);
+
+  // Target Language Selection per video (Requirement 2)
+  const [isTargetLangModalOpen, setIsTargetLangModalOpen] = useState<boolean>(false);
+  const [selectedTargetLang, setSelectedTargetLang] = useState<string | null>(() => getVideoTargetLang(videoId));
+  const [activeCue, setActiveCue] = useState<CaptionCue | null>(null);
+  const [translatedCueText, setTranslatedCueText] = useState<string | null>(null);
+
+  // Requirement 2: Ask user which language from learningLanguages to use for each new video before fetching/presenting translation
+  useEffect(() => {
+    if (!videoId) return;
+    const existing = getVideoTargetLang(videoId);
+    setSelectedTargetLang(existing);
+  }, [videoId]);
+
+  // Synchronize translated text for active cue in real time
+  useEffect(() => {
+    if (!activeCue?.text) {
+      setTranslatedCueText(null);
+      return;
+    }
+    if (!selectedTargetLang) {
+      // Prompt user to pick a target language before fetching/presenting translation
+      return;
+    }
+    let isSubscribed = true;
+    translateText(activeCue.text, 'auto', selectedTargetLang)
+      .then((t) => {
+        if (isSubscribed) setTranslatedCueText(t);
+      })
+      .catch(() => {
+        if (isSubscribed) setTranslatedCueText(null);
+      });
+    return () => {
+      isSubscribed = false;
+    };
+  }, [activeCue?.text, selectedTargetLang]);
 
   // Background check for newer APK version
   useEffect(() => {
@@ -209,6 +247,25 @@ export default function App() {
   }, [videoId]);
 
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
+
+  // Active cue tracker from player playback position
+  useEffect(() => {
+    const active = customCues && customCues.length > 0 ? customCues : (interceptedData?.cues || []);
+    if (!active || active.length === 0) {
+      setActiveCue(null);
+      return;
+    }
+    const interval = setInterval(() => {
+      try {
+        const t = playerRef.current?.getCurrentTime?.();
+        if (typeof t === 'number' && !isNaN(t) && t >= 0) {
+          const match = active.find((c) => t >= c.start && t <= c.start + c.duration);
+          setActiveCue((prev) => (prev?.id === match?.id ? prev : match || null));
+        }
+      } catch {}
+    }, 250);
+    return () => clearInterval(interval);
+  }, [customCues, interceptedData, videoId]);
 
   // Cached Video and Subtitle Library
   const [library, setLibrary] = useState<LibraryVideoItem[]>(() => {
@@ -761,13 +818,203 @@ export default function App() {
 
   const activeCues = customCues && customCues.length > 0 ? customCues : (interceptedData?.cues || []);
 
+  // Performance & Display Mode: Default Compact View (fast, tap-to-show controls, no scrolling)
+  if (settings.compactView) {
+    return (
+      <div
+        id="compact-view-container"
+        data-testid="compact-view-container"
+        className="fixed inset-0 w-screen h-screen bg-black overflow-hidden flex flex-col select-none"
+      >
+        {/* Floating Notification Toasts in compact view */}
+        {sharedLinkComplaint && (
+          <div
+            id="shared-link-complaint-banner"
+            data-testid="shared-link-complaint-banner"
+            className="absolute top-4 left-4 right-4 z-40 p-3 rounded-xl bg-red-950/95 border border-red-700 text-red-200 text-xs shadow-2xl flex items-center justify-between gap-3 animate-fadeIn"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{sharedLinkComplaint}</span>
+            </div>
+            <button
+              type="button"
+              id="dismiss-complaint-button"
+              onClick={() => setSharedLinkComplaint(null)}
+              className="p-1 text-red-400 hover:text-red-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {sharedLinkSuccess && (
+          <div
+            id="shared-link-success-banner"
+            data-testid="shared-link-success-banner"
+            className="absolute top-4 left-4 right-4 z-40 p-3 rounded-xl bg-emerald-950/95 border border-emerald-700 text-emerald-200 text-xs shadow-2xl flex items-center justify-between gap-3 animate-fadeIn"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{sharedLinkSuccess}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSharedLinkSuccess(null)}
+              className="p-1 text-emerald-400 hover:text-emerald-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {restoredToast && (
+          <div
+            id="restored-subtitles-toast"
+            data-testid="restored-subtitles-toast"
+            className="absolute top-4 left-4 right-4 z-40 p-3 rounded-xl bg-indigo-950/95 border border-indigo-700 text-indigo-200 text-xs shadow-2xl flex items-center justify-between gap-3 animate-fadeIn"
+          >
+            <div className="flex items-center gap-2">
+              <Subtitles className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>{restoredToast}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRestoredToast(null)}
+              className="p-1 text-indigo-400 hover:text-indigo-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Main Video Player in Full Screen / Compact View */}
+        <div className="flex-1 w-full h-full relative">
+          <VideoPlayer
+            ref={playerRef}
+            videoId={videoId}
+            originalUrl={currentUrl}
+            theaterMode={false}
+            onToggleTheater={() => {}}
+            startTime={startTime}
+            detectedFormat={detectedFormat}
+            onFetchSubtitles={() => handleFetchSubtitles(videoId, false)}
+            isFetchingSubtitles={isFetchingSubtitles}
+            hasSubtitles={activeCues.length > 0}
+            captionsEnabled={captionsEnabled}
+            onToggleCaptions={(enabled) => {
+              setCaptionsEnabled(enabled);
+              if (enabled) {
+                dispatch(
+                  transition({
+                    to: 'fetching_captions',
+                    actionName: 'CAPTION_ICON_TOGGLED_ON',
+                    payload: { videoId },
+                  })
+                );
+                if (activeCues.length === 0) {
+                  handleFetchSubtitles(videoId, false);
+                }
+              } else {
+                dispatch(
+                  transition({
+                    to: 'video_ready',
+                    actionName: 'CAPTION_ICON_TOGGLED_OFF',
+                    payload: { videoId },
+                  })
+                );
+              }
+            }}
+            compactView={true}
+            activeCue={activeCue}
+            translatedCueText={translatedCueText}
+            targetLanguage={selectedTargetLang}
+            onOpenTargetLanguageModal={() => setIsTargetLangModalOpen(true)}
+            onOpenSettings={() => {
+              try {
+                playerRef.current?.pauseVideo?.();
+              } catch {}
+              setIsSettingsModalOpen(true);
+            }}
+            onBackOrClose={() => setIsLibraryOpen(true)}
+          />
+        </div>
+
+        {/* Target Language Selection Modal for each video */}
+        <SelectTargetLanguageModal
+          isOpen={isTargetLangModalOpen}
+          videoId={videoId}
+          onClose={() => setIsTargetLangModalOpen(false)}
+          currentSelectedLang={selectedTargetLang}
+          onSelectLanguage={(langCode) => {
+            setSelectedTargetLang(langCode);
+            setVideoTargetLang(videoId, langCode);
+            logInfo('Language', `Selected target language "${langCode}" for video ${videoId}`);
+          }}
+        />
+
+        {/* Video & Subtitle Library Modal */}
+        <VideoLibraryModal
+          isOpen={isLibraryOpen}
+          onClose={() => setIsLibraryOpen(false)}
+          library={library}
+          currentVideoId={videoId}
+          currentCues={activeCues}
+          onSelectVideo={handleSelectLibraryItem}
+          onSaveCurrentToLibrary={handleSaveCurrentToLibrary}
+          onRemoveFromLibrary={handleRemoveFromLibrary}
+        />
+
+        {/* Share Link with App Modal */}
+        <ShareLinkModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          currentUrl={currentUrl}
+          onLoadSharedVideo={handleProcessSharedLink}
+        />
+
+        {/* Settings Modal (Pauses video when opened per Android guidelines) */}
+        <SettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          settings={settings}
+          onUpdateSettings={handleUpdateSettings}
+          onResetSettings={handleResetSettings}
+          onOpenApkUpdate={() => setIsApkUpdateModalOpen(true)}
+        />
+
+        {/* APK Update & In-App Installation Modal */}
+        <ApkUpdateModal
+          isOpen={isApkUpdateModalOpen}
+          onClose={() => setIsApkUpdateModalOpen(false)}
+        />
+
+        {/* Activity Log Modal */}
+        <ActivityLogModal
+          isOpen={isLogsModalOpen}
+          onClose={() => setIsLogsModalOpen(false)}
+        />
+
+        <OfflineIndicator />
+        {settings.enableNetworkInspector && <NetworkInspectorModal />}
+        {settings.enableErrorInspector && <ErrorInspectorModal />}
+        {settings.enableDiagnosticDock && <FloatingDiagnosticDock />}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col selection:bg-red-500/30 selection:text-red-200">
       <Navbar
         onOpenLibrary={() => setIsLibraryOpen(true)}
         libraryCount={library.length}
         onOpenShare={() => setIsShareModalOpen(true)}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => {
+          try {
+            playerRef.current?.pauseVideo?.();
+          } catch {}
+          setIsSettingsModalOpen(true);
+        }}
         onOpenLogs={() => setIsLogsModalOpen(true)}
         onOpenApkUpdate={() => setIsApkUpdateModalOpen(true)}
         hasApkUpdate={hasApkUpdate}
@@ -881,6 +1128,18 @@ export default function App() {
             isFetchingSubtitles={isFetchingSubtitles}
             hasSubtitles={activeCues.length > 0}
             captionsEnabled={captionsEnabled}
+            compactView={false}
+            activeCue={activeCue}
+            translatedCueText={translatedCueText}
+            targetLanguage={selectedTargetLang}
+            onOpenTargetLanguageModal={() => setIsTargetLangModalOpen(true)}
+            onOpenSettings={() => {
+              try {
+                playerRef.current?.pauseVideo?.();
+              } catch {}
+              setIsSettingsModalOpen(true);
+            }}
+            onBackOrClose={() => setIsLibraryOpen(true)}
             onToggleCaptions={(enabled) => {
               setCaptionsEnabled(enabled);
               if (enabled) {
@@ -940,6 +1199,19 @@ export default function App() {
         <span>•</span>
         <span>Link Sharing &amp; Persistent Subtitle Caching</span>
       </footer>
+
+      {/* Target Language Selection Modal for each video */}
+      <SelectTargetLanguageModal
+        isOpen={isTargetLangModalOpen}
+        videoId={videoId}
+        onClose={() => setIsTargetLangModalOpen(false)}
+        currentSelectedLang={selectedTargetLang}
+        onSelectLanguage={(langCode) => {
+          setSelectedTargetLang(langCode);
+          setVideoTargetLang(videoId, langCode);
+          logInfo('Language', `Selected target language "${langCode}" for video ${videoId}`);
+        }}
+      />
 
       {/* Video & Subtitle Library Modal */}
       <VideoLibraryModal

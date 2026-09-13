@@ -9,8 +9,8 @@
 
 set -uo pipefail
 
-REPO_OWNER="baobabitogether1-hash"
-REPO_NAME="youtubenet4"
+REPO_OWNER="baobabitogether-a11y"
+REPO_NAME="youtubenet3"
 ARG_INPUT="${1:-v1.0.13}"
 APK_NAME="YouTube-Viewer-debug.apk"
 PACKAGE_NAME="com.ytviewer.app"

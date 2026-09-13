@@ -1,5 +1,5 @@
 import React from 'react';
-import { AppSettings } from '../utils/appSettings';
+import { AppSettings, SUPPORTED_LANGUAGES_CATALOG } from '../utils/appSettings';
 import {
   X,
   Settings,
@@ -15,6 +15,8 @@ import {
   Smartphone,
   Download,
   ExternalLink,
+  Eye,
+  Plus,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -80,6 +82,80 @@ export function SettingsModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-sm">
+          {/* Section: Display & Performance Mode */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+              <Eye className="w-4 h-4 text-emerald-400" />
+              <span>Display &amp; Performance Mode</span>
+            </h3>
+            <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-4">
+              <div>
+                <div className="font-medium text-xs sm:text-sm text-neutral-200">
+                  Compact View (Fast, Lightweight, Tap-to-Show Controls)
+                </div>
+                <div className="text-xs text-neutral-400 mt-0.5">
+                  Designed for high performance without scrolling. Controls hide automatically during video playback and appear when tapped.
+                </div>
+              </div>
+              <input
+                id="toggle-compact-view-setting"
+                type="checkbox"
+                checked={settings.compactView ?? true}
+                onChange={(e) =>
+                  onUpdateSettings({ ...settings, compactView: e.target.checked })
+                }
+                className="w-5 h-5 accent-emerald-500 rounded cursor-pointer shrink-0"
+              />
+            </div>
+          </div>
+
+          {/* Section: General Learning Languages */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-indigo-400" />
+                <span>General Learning Languages (Translation Targets)</span>
+              </h3>
+              <span className="text-[11px] text-neutral-500">
+                {(settings.learningLanguages || []).length} active
+              </span>
+            </div>
+            <p className="text-xs text-neutral-400">
+              When loading any new video, the app will ask which of your chosen languages you want to translate into.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {SUPPORTED_LANGUAGES_CATALOG.map((lang) => {
+                const isSelected = (settings.learningLanguages || ['es', 'fr', 'de', 'it', 'ja']).includes(lang.code);
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      const current = settings.learningLanguages || ['es', 'fr', 'de', 'it', 'ja'];
+                      let updated: string[];
+                      if (isSelected) {
+                        if (current.length <= 1) return; // Keep at least one
+                        updated = current.filter((c) => c !== lang.code);
+                      } else {
+                        updated = [...current, lang.code];
+                      }
+                      onUpdateSettings({ ...settings, learningLanguages: updated });
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition active:scale-95 ${
+                      isSelected
+                        ? 'bg-indigo-950/60 border-indigo-500/80 text-indigo-200 shadow-sm shadow-indigo-950/40'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                    }`}
+                  >
+                    <span>{lang.name}</span>
+                    <span className="text-[10px] uppercase opacity-60">({lang.code})</span>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400 ml-0.5" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Section 1: Playback Order Sequence */}
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-2">
