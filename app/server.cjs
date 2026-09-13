@@ -635,50 +635,61 @@ async function startServer() {
   let apkReleaseCache = null;
   app.get("/api/check-apk-update", async (req, res) => {
     try {
-      const repo = req.query.repo || "baobabitogether-a11y/youtubenet3";
+      const requestedRepo = req.query.repo;
+      const candidateRepos = requestedRepo ? [requestedRepo] : ["baobabitogether1-hash/youtubenet4", "baobabitogether-a11y/youtubenet3"];
       const now = Date.now();
-      if (apkReleaseCache && now - apkReleaseCache.timestamp < 6e4 && !req.query.force) {
+      const targetRepoKey = candidateRepos.join(",");
+      if (apkReleaseCache && apkReleaseCache.repo === targetRepoKey && now - apkReleaseCache.timestamp < 6e4 && !req.query.force) {
         return res.json(apkReleaseCache.data);
       }
-      const response = await fetch(`https://api.github.com/repos/${repo}/releases`, {
-        headers: {
-          "User-Agent": "YouTubeViewer-App/1.0",
-          Accept: "application/vnd.github.v3+json"
-        }
-      });
-      if (!response.ok) {
-        return res.status(response.status).json({
-          error: `GitHub API returned ${response.status}`,
-          repo
-        });
-      }
-      const releases = await response.json();
-      if (!Array.isArray(releases) || releases.length === 0) {
-        return res.status(404).json({ error: "No releases found", repo });
-      }
-      for (const release of releases) {
-        const apkAsset = release.assets?.find(
-          (a) => a.name.toLowerCase().includes("youtube-viewer-debug.apk") || a.name.toLowerCase().endsWith(".apk")
-        );
-        if (apkAsset) {
-          const result = {
-            success: true,
-            tagName: release.tag_name,
-            name: release.name || release.tag_name,
-            publishedAt: release.published_at,
-            body: release.body || "",
-            htmlUrl: release.html_url,
-            asset: {
-              name: apkAsset.name,
-              size: apkAsset.size,
-              downloadUrl: apkAsset.browser_download_url
+      let bestResult = null;
+      for (const repo of candidateRepos) {
+        try {
+          const response = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+            headers: {
+              "User-Agent": "YouTubeViewer-App/1.0",
+              Accept: "application/vnd.github.v3+json"
             }
-          };
-          apkReleaseCache = { data: result, timestamp: now };
-          return res.json(result);
+          });
+          if (!response.ok) continue;
+          const releases = await response.json();
+          if (!Array.isArray(releases) || releases.length === 0) continue;
+          for (const release of releases) {
+            const apkAsset = release.assets?.find(
+              (a) => a.name.toLowerCase().includes("youtube-viewer-debug.apk") || a.name.toLowerCase().endsWith(".apk")
+            );
+            if (apkAsset) {
+              const result = {
+                success: true,
+                repo,
+                tagName: release.tag_name,
+                name: release.name || release.tag_name,
+                publishedAt: release.published_at,
+                body: release.body || "",
+                htmlUrl: release.html_url,
+                asset: {
+                  name: apkAsset.name,
+                  size: apkAsset.size,
+                  downloadUrl: apkAsset.browser_download_url
+                }
+              };
+              bestResult = result;
+              break;
+            }
+          }
+          if (bestResult) break;
+        } catch (subErr) {
+          console.warn(`[Server] Error querying repo ${repo} for APK releases:`, subErr);
         }
       }
-      return res.status(404).json({ error: "No APK assets found in recent releases", repo });
+      if (bestResult) {
+        apkReleaseCache = { data: bestResult, timestamp: now, repo: targetRepoKey };
+        return res.json(bestResult);
+      }
+      return res.status(404).json({
+        error: "No APK assets found in releases",
+        checkedRepos: candidateRepos
+      });
     } catch (err) {
       console.error("[Server] Error checking APK update:", err);
       return res.status(500).json({ error: err.message || "Failed to check APK updates" });
@@ -712,6 +723,7 @@ async function startServer() {
         res.setHeader("Content-Length", contentLength);
       }
       res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Disposition, Content-Type");
       if (!upstream.body) {
         return res.status(500).json({ error: "No response body received from APK host" });
       }
