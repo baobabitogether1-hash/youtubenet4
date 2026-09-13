@@ -22,24 +22,29 @@ The application, E2E test reports, and real device emulation results are publish
 To download and install the latest `YouTube-Viewer-debug.apk` directly onto a connected Android device or emulator via ADB **without cloning this repository or relying on any local files**, run this remote CLI command in your Terminal or Git Bash:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash
+curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash
 ```
 
-### Additional CLI Examples
+### Additional CLI Options & Repositories
 
-- **Install a specific version / tag:**
+- **Install latest from `youtubenet3` fallback:**
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash -s -- v1.0.14
+  curl -fsSL https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash
+  ```
+
+- **Install a specific version / tag (e.g. `v1.0.16` or `v1.0.14`):**
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash -s -- v1.0.16
   ```
 
 - **Install from a direct release asset URL:**
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash -s -- "https://github.com/baobabitogether-a11y/youtubenet3/releases/download/v1.0.14/YouTube-Viewer-debug.apk"
+  curl -fsSL https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash -s -- "https://github.com/baobabitogether1-hash/youtubenet4/releases/download/v1.0.16/YouTube-Viewer-debug.apk"
   ```
 
 - **Alternative using `wget`:**
   ```bash
-  wget -qO- https://raw.githubusercontent.com/baobabitogether-a11y/youtubenet3/main/update.apk.sh | bash
+  wget -qO- https://raw.githubusercontent.com/baobabitogether1-hash/youtubenet4/main/update.apk.sh | bash
   ```
 
 The remote script automatically:

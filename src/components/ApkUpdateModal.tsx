@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 import {
   X,
   Smartphone,
@@ -30,6 +31,7 @@ import {
   getBashScriptCommand,
 } from '../utils/apkUpdater';
 import { logInfo, logError } from '../utils/logBuffer';
+import { addError } from '../store/errorsSlice';
 
 interface ApkUpdateModalProps {
   isOpen: boolean;
@@ -42,6 +44,7 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
   onClose,
   initialCheck = false,
 }) => {
+  const dispatch = useDispatch();
   const [repo, setRepo] = useState(DEFAULT_REPO);
   const [currentVersion, setCurrentVersion] = useState(CURRENT_APK_VERSION);
   const [isLoading, setIsLoading] = useState(false);
@@ -97,6 +100,13 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
   const handleInstallViaApp = async (url: string, name?: string) => {
     setInstallError(null);
     setInstalledNotice(null);
+    setDownloadProgress({
+      state: 'downloading',
+      percent: 1,
+      loadedBytes: 0,
+      totalBytes: 15 * 1024 * 1024,
+      speedBps: 0,
+    });
     logInfo('ApkUpdater', `Starting in-app download and installation for ${name || 'APK'} from ${url}...`);
 
     try {
@@ -108,18 +118,34 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
           if (progress.state === 'error' && progress.error) {
             setInstallError(progress.error);
             logError('ApkUpdater', `In-app APK installation failed: ${progress.error}`);
+            dispatch(
+              addError({
+                section: 'network',
+                title: 'APK Installation Failed',
+                message: progress.error,
+                details: { url },
+              })
+            );
           }
         }
       );
 
       if (result.success) {
         setInstalledNotice(
-          'Download finished! Opening Android package installer. If the system prompt does not appear, check your device Downloads folder or tap the direct APK link below.'
+          'Download finished! Opening Android package installer. If the system prompt does not appear, tap "Open Package Installer" below or check your device Downloads folder.'
         );
         logInfo('ApkUpdater', `In-app installation triggered successfully for ${name || 'APK'}.`);
       } else if (result.error) {
         setInstallError(result.error);
         logError('ApkUpdater', `In-app installation failed: ${result.error}`);
+        dispatch(
+          addError({
+            section: 'network',
+            title: 'APK Installation Failed',
+            message: result.error,
+            details: { url },
+          })
+        );
       }
     } catch (err: any) {
       const msg = err.message || 'An unexpected error occurred during APK installation.';
@@ -133,6 +159,14 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
         error: msg,
       });
       logError('ApkUpdater', `Installation error: ${msg}`);
+      dispatch(
+        addError({
+          section: 'network',
+          title: 'APK Installation Error',
+          message: msg,
+          details: { url },
+        })
+      );
     }
   };
 
@@ -455,9 +489,30 @@ export const ApkUpdateModal: React.FC<ApkUpdateModalProps> = ({
 
               {/* Installed Notice */}
               {installedNotice && (
-                <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-600/60 text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{installedNotice}</span>
+                <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-600/70 text-emerald-200 text-xs flex flex-col gap-2.5 animate-fadeIn">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-medium">{installedNotice}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-emerald-900/60">
+                    <a
+                      href={downloadProgress?.blobUrl || releaseInfo.downloadUrl}
+                      download={releaseInfo.apkName}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow inline-flex items-center gap-1.5 transition active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Open Package Installer / Install APK</span>
+                    </a>
+                    <a
+                      href={releaseInfo.downloadUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium text-xs inline-flex items-center gap-1 transition"
+                    >
+                      <ExternalLink className="w-3 h-3 text-neutral-400" />
+                      <span>Direct Download Link</span>
+                    </a>
+                  </div>
                 </div>
               )}
 
