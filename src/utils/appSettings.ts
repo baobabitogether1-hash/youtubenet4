@@ -1,8 +1,12 @@
+import { STORAGE_KEYS } from '../config/appConfig';
+
 /**
  * App Settings Configuration and Local Persistence
  * Advanced features are turned OFF by default to prevent resource draining.
  * Subtitle fetching methods are configurable and enabled by default.
  */
+
+export type SubtitlePosition = 'top' | 'above' | 'under' | 'bottom';
 
 export interface AppSettings {
   // UI Display: Compact, lightweight view by default (Android UI Guidelines: no scrolling, minimal controls)
@@ -11,8 +15,18 @@ export interface AppSettings {
   showTeacherPanel: boolean;
   showLinkBar: boolean;
 
+  // Key Buttons Display: By default always show the most important buttons (Requirement 1)
+  alwaysShowKeyControls: boolean;
+
+  // Subtitle Positioning: By default keep translated subs on top (Requirement 1)
+  subtitlePosition: SubtitlePosition;
+  showTranslatedOnTop: boolean;
+
   // General languages user wants to learn from as target for future translation
   learningLanguages: string[];
+
+  // Auto-fetch target translation subtitles via tlang once after default subs loaded (Requirement 6)
+  autoFetchTargetTranslationsWithTlang: boolean;
 
   // Advanced Features (OFF by default)
   enableDiagnosticDock: boolean;
@@ -59,8 +73,18 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showTeacherPanel: false,
   showLinkBar: false,
 
+  // By default always show the most important buttons (Requirement 1)
+  alwaysShowKeyControls: true,
+
+  // By default keep translated subtitles on top, overlay inside top of video (Requirement 1)
+  subtitlePosition: 'top',
+  showTranslatedOnTop: true,
+
   // General learning target languages list
   learningLanguages: ['es', 'fr', 'de', 'ja'],
+
+  // By default try to subtitle fetch using tlang param change once after default subs loaded (Requirement 6)
+  autoFetchTargetTranslationsWithTlang: true,
 
   // Advanced features: OFF by default
   enableDiagnosticDock: false,
@@ -82,7 +106,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   maxRetries: 2,
 };
 
-const SETTINGS_STORAGE_KEY = 'yt_app_settings_v3';
+const SETTINGS_STORAGE_KEY = STORAGE_KEYS.SETTINGS_STORAGE_KEY;
 
 export function loadAppSettings(): AppSettings {
   if (typeof window === 'undefined') return DEFAULT_APP_SETTINGS;

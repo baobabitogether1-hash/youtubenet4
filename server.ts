@@ -176,11 +176,11 @@ async function startServer() {
         });
       }
 
-      // 3. Subtitle fetching via GEMINI_API_KEY is DEPRECATED
+      // 3. Fallback when no timedtext found
       return res.status(404).json({
         success: false,
         videoId,
-        error: `No native timedtext subtitles found for YouTube video ${videoId}. Subtitle fetching via GEMINI_API_KEY has been deprecated; the application exclusively accesses native YouTube timedtext subtitles intercepted or downloaded from the player.`,
+        error: `No native timedtext subtitles found for YouTube video ${videoId}. The application exclusively accesses native YouTube timedtext subtitles intercepted or downloaded from the player.`,
         source: 'none',
       });
     } catch (err: any) {

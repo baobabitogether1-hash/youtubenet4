@@ -88,24 +88,128 @@ export function SettingsModal({
               <Eye className="w-4 h-4 text-emerald-400" />
               <span>Display &amp; Performance Mode</span>
             </h3>
-            <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-4">
-              <div>
-                <div className="font-medium text-xs sm:text-sm text-neutral-200">
-                  Compact View (Fast, Lightweight, Tap-to-Show Controls)
+            <div className="space-y-2">
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-xs sm:text-sm text-neutral-200">
+                    Always Show Key Buttons (Play/Pause, CC, Language, Settings)
+                  </div>
+                  <div className="text-xs text-neutral-400 mt-0.5">
+                    Keeps the most important player buttons persistently accessible at all times.
+                  </div>
                 </div>
-                <div className="text-xs text-neutral-400 mt-0.5">
-                  Designed for high performance without scrolling. Controls hide automatically during video playback and appear when tapped.
+                <input
+                  id="toggle-always-show-key-controls"
+                  type="checkbox"
+                  checked={settings.alwaysShowKeyControls ?? true}
+                  onChange={(e) =>
+                    onUpdateSettings({ ...settings, alwaysShowKeyControls: e.target.checked })
+                  }
+                  className="w-5 h-5 accent-emerald-500 rounded cursor-pointer shrink-0"
+                />
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-xs sm:text-sm text-neutral-200">
+                    Subtitle Position
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-400 uppercase">
+                    {settings.subtitlePosition || 'top'}
+                  </span>
+                </div>
+                <div className="text-xs text-neutral-400">
+                  Select where dialogue captions are displayed on screen.
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  {(
+                    [
+                      { id: 'top', label: 'On Top (Video)' },
+                      { id: 'above', label: 'Above Player' },
+                      { id: 'under', label: 'Under Player' },
+                      { id: 'bottom', label: 'Bottom (Video)' },
+                    ] as const
+                  ).map((pos) => (
+                    <button
+                      key={pos.id}
+                      type="button"
+                      onClick={() =>
+                        onUpdateSettings({ ...settings, subtitlePosition: pos.id })
+                      }
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        (settings.subtitlePosition || 'top') === pos.id
+                          ? 'bg-emerald-950/70 border-emerald-500/80 text-emerald-200 shadow-sm'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                      }`}
+                    >
+                      {pos.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <input
-                id="toggle-compact-view-setting"
-                type="checkbox"
-                checked={settings.compactView ?? true}
-                onChange={(e) =>
-                  onUpdateSettings({ ...settings, compactView: e.target.checked })
-                }
-                className="w-5 h-5 accent-emerald-500 rounded cursor-pointer shrink-0"
-              />
+
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-xs sm:text-sm text-neutral-200">
+                    Keep Translated Subtitles on Top
+                  </div>
+                  <div className="text-xs text-neutral-400 mt-0.5">
+                    Places translated dialogue on top above the original spoken line for comfortable reading.
+                  </div>
+                </div>
+                <input
+                  id="toggle-translated-subs-on-top"
+                  type="checkbox"
+                  checked={settings.showTranslatedOnTop ?? true}
+                  onChange={(e) =>
+                    onUpdateSettings({ ...settings, showTranslatedOnTop: e.target.checked })
+                  }
+                  className="w-5 h-5 accent-emerald-500 rounded cursor-pointer shrink-0"
+                />
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-xs sm:text-sm text-neutral-200">
+                    Auto-fetch Target Subtitles via tlang
+                  </div>
+                  <div className="text-xs text-neutral-400 mt-0.5">
+                    Try once to fetch user-defined target language subtitles using YouTube tlang parameter change after default subtitles are fetched, presenting 1 notification.
+                  </div>
+                </div>
+                <input
+                  id="toggle-autofetch-target-tlang"
+                  type="checkbox"
+                  checked={settings.autoFetchTargetTranslationsWithTlang ?? true}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      autoFetchTargetTranslationsWithTlang: e.target.checked,
+                    })
+                  }
+                  className="w-5 h-5 accent-indigo-500 rounded cursor-pointer shrink-0"
+                />
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium text-xs sm:text-sm text-neutral-200">
+                    Compact View (Fast, Lightweight, Tap-to-Show Controls)
+                  </div>
+                  <div className="text-xs text-neutral-400 mt-0.5">
+                    Designed for high performance without scrolling. Controls hide automatically during video playback and appear when tapped.
+                  </div>
+                </div>
+                <input
+                  id="toggle-compact-view-setting"
+                  type="checkbox"
+                  checked={settings.compactView ?? true}
+                  onChange={(e) =>
+                    onUpdateSettings({ ...settings, compactView: e.target.checked })
+                  }
+                  className="w-5 h-5 accent-emerald-500 rounded cursor-pointer shrink-0"
+                />
+              </div>
             </div>
           </div>
 
@@ -266,7 +370,7 @@ export function SettingsModal({
                     Server Subtitle Extraction API
                   </div>
                   <div className="text-xs text-neutral-400">
-                    Direct YouTube timedtext extraction (GEMINI_API_KEY transcription deprecated; relies on native player captions).
+                    Direct YouTube timedtext extraction (relies on native player captions).
                   </div>
                 </div>
                 <input

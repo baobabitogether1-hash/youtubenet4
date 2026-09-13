@@ -410,11 +410,8 @@ export function getYouTubeThumbnailUrl(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
-/**
- * Default sample video ID requested by user
- */
-export const DEFAULT_VIDEO_URL = 'https://www.youtube.com/watch?v=FcRzAdI8R9U';
-export const DEFAULT_VIDEO_ID = 'FcRzAdI8R9U';
+import { DEFAULT_VIDEO_ID, DEFAULT_VIDEO_URL } from '../config/appConfig';
+export { DEFAULT_VIDEO_ID, DEFAULT_VIDEO_URL };
 
 /**
  * Curated list of varied real-world YouTube URL formats for interactive testing
