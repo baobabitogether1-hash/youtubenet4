@@ -329,11 +329,6 @@ on:
         required: false
         type: boolean
         default: false
-      run_e2e_tests:
-        description: 'Run E2E UI verification tests and produce video artifact'
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -347,7 +342,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+          cache: 'npm'
+      - run: npm ci || npm install
       - run: npm run build
       - name: Bundle Web Assets into Android
         run: |
@@ -357,31 +353,25 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Accept Android SDK Licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
       - uses: gradle/actions/setup-gradle@v3
         with:
           build-root-directory: android-shell
-      - name: Build APKs
+      - name: Build Debug APK
         run: |
           chmod +x android-shell/gradlew
           cd android-shell
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleDebug --no-daemon -Dorg.gradle.parallel=true
       - name: Organize Artifacts
-        if: always()
         run: |
           mkdir -p release-artifacts
-          find android-shell/app/build/outputs/apk/release -type f -name "*.apk" -exec cp {} release-artifacts/YouTube-Viewer-release.apk \\; 2>/dev/null || true
           find android-shell/app/build/outputs/apk/debug -type f -name "*.apk" -exec cp {} release-artifacts/YouTube-Viewer-debug.apk \\; 2>/dev/null || true
           cd release-artifacts
           for apk in *.apk; do [ -f "$apk" ] && sha256sum "$apk" > "$apk.sha256"; done
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: youtube-viewer-apks
           path: release-artifacts/*
-          if-no-files-found: ignore
       - uses: softprops/action-gh-release@v2
         if: success() && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         continue-on-error: true
@@ -391,28 +381,7 @@ jobs:
           fail_on_unmatched_files: false
           token: \${{ secrets.GITHUB_TOKEN }}
         env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-      - name: Install Playwright Browsers
-        if: (!cancelled()) && (github.event.inputs.run_e2e_tests != 'false')
-        run: npx playwright install --with-deps chromium
-      - name: Run E2E Test Suite & Record Video
-        if: (!cancelled()) && (github.event.inputs.run_e2e_tests != 'false')
-        run: |
-          mkdir -p e2e-video-artifacts
-          npx playwright test || true
-          count=1
-          find test-results -type f \\( -name "*.webm" -o -name "*.mp4" \\) | while read -r vid; do
-            cp "$vid" "e2e-video-artifacts/youtube-viewer-e2e-run-\${count}.webm"
-            cp "$vid" "e2e-video-artifacts/youtube-viewer-e2e-run.webm"
-            count=$((count+1))
-          done
-      - name: Upload E2E Test Video Artifact
-        if: (!cancelled()) && (github.event.inputs.run_e2e_tests != 'false')
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-video-recording
-          path: e2e-video-artifacts/*
-          retention-days: 14`;
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`;
 
 export const ApkGuideModal: React.FC<ApkGuideModalProps> = ({
   isOpen,

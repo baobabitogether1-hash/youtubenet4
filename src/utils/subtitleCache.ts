@@ -1,9 +1,11 @@
 import { CaptionCue, LibraryVideoItem } from '../types';
 import { cleanAndFixEncoding } from './captionParser';
+import { STORAGE_KEYS } from '../config/appConfig';
+import { SAMPLE_AUTHENTIC_RUSSIAN_URL } from '../config/fixtures';
 
-const SUBTITLE_CACHE_PREFIX = 'yt_subtitles_';
-const LIBRARY_STORAGE_KEY = 'yt_video_library_v2';
-const LAST_ACTIVE_VIDEO_KEY = 'yt_last_active_video_v1';
+const SUBTITLE_CACHE_PREFIX = STORAGE_KEYS.SUBTITLE_CACHE_PREFIX;
+const LIBRARY_STORAGE_KEY = STORAGE_KEYS.LIBRARY_STORAGE_KEY;
+const LAST_ACTIVE_VIDEO_KEY = STORAGE_KEYS.LAST_ACTIVE_VIDEO_KEY;
 
 // In-memory cache for fast synchronous access
 const memoryCache = new Map<string, CaptionCue[]>();
@@ -213,14 +215,13 @@ export function getLastActiveVideo(): { videoId: string; url: string } | null {
   return null;
 }
 
-const TIMEDTEXT_URL_PREFIX = 'yt_observed_timedtext_';
+const TIMEDTEXT_URL_PREFIX = STORAGE_KEYS.TIMEDTEXT_URL_PREFIX;
 
 // In-memory observed timedtext requests
 const observedTimedTextCache = new Map<string, string>();
 
 // Example observed timedtext request URL for FcRzAdI8R9U
-export const SAMPLE_OBSERVED_TIMEDTEXT_URL =
-  'https://www.youtube.com/api/timedtext?v=FcRzAdI8R9U&ei=DCKeatfmPKPRp-oPnqqzgQk&caps=asr&opi=112496729&exp=xpe&xoaf=5&xowf=1&xospf=1&hl=iw&ip=0.0.0.0&ipbits=0&expire=1788773501&sparams=ip%2Cipbits%2Cexpire%2Cv%2Cei%2Ccaps%2Copi%2Cexp%2Cxoaf&signature=217DB32BACFE6E926084313687E03C0510F5DB34.D9A7AA9EE51F782ED170B2AA7DE3BD0AC740CF6A&key=yt8&kind=asr&lang=ru&potc=1&pot=MlMn_joq5JrJpSfCjjnANqOg57lCS8ADS5l8eKcn0AlVAENOp6W5mBZK47JADSIT6O2ApINKm8nUuNtmdxJwIJwpTZBJx8pnBEBe0f6-5yn6TBh6DA%3D%3D&fmt=json3&xorb=2&xobt=3&xovt=3&tlang=en&cbr=Chrome&cbrver=152.0.0.0&c=WEB&cver=2.20260904.01.00&cplayer=UNIPLAYER&cos=Windows&cosver=10.0&cplatform=DESKTOP';
+export const SAMPLE_OBSERVED_TIMEDTEXT_URL = SAMPLE_AUTHENTIC_RUSSIAN_URL;
 
 export function saveObservedTimedTextUrl(videoId: string, url: string): void {
   if (!videoId || !url) return;

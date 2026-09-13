@@ -9,15 +9,17 @@
 
 set -uo pipefail
 
-REPO_OWNER="baobabitogether-a11y"
-REPO_NAME="youtubenet3"
-ARG_INPUT="${1:-v1.0.13}"
+REPO_OWNER="baobabitogether1-hash"
+REPO_NAME="youtubenet4"
+ALT_REPO_OWNER="baobabitogether-a11y"
+ALT_REPO_NAME="youtubenet3"
+ARG_INPUT="${1:-latest}"
 APK_NAME="YouTube-Viewer-debug.apk"
 PACKAGE_NAME="com.ytviewer.app"
 MAIN_ACTIVITY="com.ytviewer.app/.MainActivity"
 
 # ----------------------------------------------------------------------------
-# 1. Parse Input Argument (Full URL vs Tag/Version)
+# 1. Parse Input Argument (Full URL vs Tag/Version vs 'latest')
 # ----------------------------------------------------------------------------
 if [[ "${ARG_INPUT}" =~ ^https?:// ]]; then
   DOWNLOAD_URL="${ARG_INPUT}"
@@ -31,6 +33,20 @@ if [[ "${ARG_INPUT}" =~ ^https?:// ]]; then
     REPO_OWNER="${BASH_REMATCH[1]}"
     REPO_NAME="${BASH_REMATCH[2]}"
   fi
+elif [[ "${ARG_INPUT}" == "latest" || -z "${ARG_INPUT}" ]]; then
+  echo "[*] Resolving latest release from GitHub API..."
+  API_RESP=$(curl -s "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest" 2>/dev/null || true)
+  VERSION=$(echo "${API_RESP}" | grep -oE '"tag_name": *"[^"]+"' | head -1 | cut -d'"' -f4)
+  if [ -z "${VERSION}" ]; then
+    API_RESP=$(curl -s "https://api.github.com/repos/${ALT_REPO_OWNER}/${ALT_REPO_NAME}/releases/latest" 2>/dev/null || true)
+    VERSION=$(echo "${API_RESP}" | grep -oE '"tag_name": *"[^"]+"' | head -1 | cut -d'"' -f4)
+    if [ -n "${VERSION}" ]; then
+      REPO_OWNER="${ALT_REPO_OWNER}"
+      REPO_NAME="${ALT_REPO_NAME}"
+    fi
+  fi
+  VERSION="${VERSION:-v1.0.16}"
+  DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${APK_NAME}"
 else
   VERSION="${ARG_INPUT}"
   DOWNLOAD_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${APK_NAME}"

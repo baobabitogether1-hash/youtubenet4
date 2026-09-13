@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   Settings,
   Globe,
+  Layers,
 } from 'lucide-react';
 import { getYouTubeEmbedUrl, formatTypeName } from '../utils/youtube';
 import { YouTubeFormatType, YouTubePlayerHandle, CaptionCue } from '../types';
@@ -26,6 +27,8 @@ import { useAppDispatch } from '../store';
 import { setPlayerReady as setReduxPlayerReady, setPlayerState as setReduxPlayerState } from '../store/videoSlice';
 import { transition } from '../store/stateMachineSlice';
 import { addError } from '../store/errorsSlice';
+import { UI_TEXT } from '../config/appConfig';
+import { SubtitlePosition } from '../utils/appSettings';
 
 interface VideoPlayerProps {
   videoId: string;
@@ -47,6 +50,10 @@ interface VideoPlayerProps {
   onOpenSettings?: () => void;
   onBackOrClose?: () => void;
   onTimeUpdate?: (currentTime: number) => void;
+  alwaysShowKeyControls?: boolean;
+  subtitlePosition?: SubtitlePosition;
+  showTranslatedOnTop?: boolean;
+  onChangeSubtitlePosition?: (pos: SubtitlePosition) => void;
 }
 
 export const VideoPlayer = forwardRef<YouTubePlayerHandle, VideoPlayerProps>(
@@ -71,6 +78,10 @@ export const VideoPlayer = forwardRef<YouTubePlayerHandle, VideoPlayerProps>(
       onOpenSettings,
       onBackOrClose,
       onTimeUpdate,
+      alwaysShowKeyControls = true,
+      subtitlePosition = 'top',
+      showTranslatedOnTop = true,
+      onChangeSubtitlePosition,
     },
     ref
   ) => {
@@ -114,15 +125,33 @@ export const VideoPlayer = forwardRef<YouTubePlayerHandle, VideoPlayerProps>(
 
     const resetHideControlsTimer = useCallback(() => {
       if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
+      // Requirement 1: By default always show the most important buttons
+      if (alwaysShowKeyControls) {
+        setShowControls(true);
+        return;
+      }
       if (isPlayingRef.current) {
         hideControlsTimerRef.current = setTimeout(() => {
           setShowControls(false);
         }, 3500);
       }
-    }, []);
+    }, [alwaysShowKeyControls]);
 
-    // Toggle controls on tap/click
+    const cycleSubtitlePosition = (e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      const positions: SubtitlePosition[] = ['top', 'above', 'under', 'bottom'];
+      const curIdx = positions.indexOf(subtitlePosition);
+      const nextPos = positions[(curIdx + 1) % positions.length];
+      onChangeSubtitlePosition?.(nextPos);
+    };
+
+    // Toggle controls or playback on tap/click
     const handleTapVideoArea = () => {
+      if (alwaysShowKeyControls) {
+        // Tap directly toggles play/pause while keeping key buttons visible
+        togglePlayPause();
+        return;
+      }
       setShowControls((prev) => {
         const next = !prev;
         if (next && isPlayingRef.current) {

@@ -26,8 +26,8 @@ export interface ApkReleaseInfo {
 }
 
 export const CURRENT_APK_VERSION = 'v1.0.13';
-export const DEFAULT_REPO = 'baobabitogether-a11y/youtubenet3';
-export const FALLBACK_REPO = 'baobabitogether1-hash/youtubenet4';
+export const DEFAULT_REPO = 'baobabitogether1-hash/youtubenet4';
+export const FALLBACK_REPO = 'baobabitogether-a11y/youtubenet3';
 
 /**
  * Format bytes to human readable format (MB/KB)
@@ -95,44 +95,49 @@ export async function checkApkUpdate(
     // Fallback to direct client-side GitHub query
   }
 
-  // 2. Fallback to direct GitHub API
+  // 2. Fallback to direct GitHub API if server endpoint failed or returned empty
   if (!releaseData) {
-    const ghRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
-      headers: {
-        Accept: 'application/vnd.github.v3+json',
-      },
-    });
-
-    if (!ghRes.ok) {
-      throw new Error(`GitHub release check failed (${ghRes.status}): ${ghRes.statusText}`);
-    }
-
-    const releases = await ghRes.json();
-    if (!Array.isArray(releases) || releases.length === 0) {
-      throw new Error(`No releases found in repository ${repo}`);
-    }
-
-    // Find the latest release containing an APK
-    for (const rel of releases) {
-      const apk = rel.assets?.find(
-        (a: any) =>
-          a.name.toLowerCase().includes('youtube-viewer-debug.apk') ||
-          a.name.toLowerCase().endsWith('.apk')
-      );
-      if (apk) {
-        releaseData = {
-          tagName: rel.tag_name,
-          name: rel.name || rel.tag_name,
-          publishedAt: rel.published_at,
-          body: rel.body || '',
-          htmlUrl: rel.html_url,
-          asset: {
-            name: apk.name,
-            size: apk.size,
-            downloadUrl: apk.browser_download_url,
+    const reposToTry = [repo, repo === DEFAULT_REPO ? FALLBACK_REPO : DEFAULT_REPO];
+    for (const r of reposToTry) {
+      try {
+        const ghRes = await fetch(`https://api.github.com/repos/${r}/releases`, {
+          headers: {
+            Accept: 'application/vnd.github.v3+json',
           },
-        };
-        break;
+        });
+
+        if (!ghRes.ok) continue;
+
+        const releases = await ghRes.json();
+        if (!Array.isArray(releases) || releases.length === 0) continue;
+
+        // Find the latest release containing an APK
+        for (const rel of releases) {
+          const apk = rel.assets?.find(
+            (a: any) =>
+              a.name.toLowerCase().includes('youtube-viewer-debug.apk') ||
+              a.name.toLowerCase().endsWith('.apk')
+          );
+          if (apk) {
+            releaseData = {
+              tagName: rel.tag_name,
+              name: rel.name || rel.tag_name,
+              publishedAt: rel.published_at,
+              body: rel.body || '',
+              htmlUrl: rel.html_url,
+              repo: r,
+              asset: {
+                name: apk.name,
+                size: apk.size,
+                downloadUrl: apk.browser_download_url,
+              },
+            };
+            break;
+          }
+        }
+        if (releaseData) break;
+      } catch {
+        // try next repo
       }
     }
   }
@@ -156,7 +161,7 @@ export async function checkApkUpdate(
     formattedSize: formatBytes(releaseData.asset.size),
     isNewer,
     currentVersion,
-    repo,
+    repo: releaseData.repo || repo,
   };
 }
 
@@ -205,9 +210,31 @@ export async function downloadAndInstallApkWithProgress(
   try {
     response = await fetch(targetFetchUrl);
     if (!response.ok) {
+      // Check if proxy returned an error message in JSON
+      let proxyErrDetail = '';
+      try {
+        const errorJson = await response.clone().json();
+        if (errorJson.error) {
+          proxyErrDetail = errorJson.error;
+        }
+      } catch {}
+
       // Fallback to direct download URL
       targetFetchUrl = downloadUrl;
-      response = await fetch(targetFetchUrl);
+      try {
+        response = await fetch(targetFetchUrl);
+      } catch (directErr: any) {
+        const errMsg = proxyErrDetail || `Download failed: ${directErr.message || response.statusText}`;
+        updateProgress({
+          state: 'error',
+          percent: 0,
+          loadedBytes: 0,
+          totalBytes: 0,
+          speedBps: 0,
+          error: errMsg,
+        });
+        return { success: false, error: errMsg };
+      }
     }
   } catch (err: any) {
     try {

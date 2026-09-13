@@ -1,25 +1,37 @@
 # AGENTS.md — Developer & Coding Agent Guidelines
 
-## ⚠️ Critical Rule for Coding Agents: How Not to Break This Application
+## 0. Mandatory Prompt & Task Tracking Rule
 
-This repository contains a hybrid architecture:
-1. **A Web Application** (React 19 + TypeScript + Vite + Tailwind CSS + Express backend).
-2. **An Android Native Shell APK** (`android-shell/`), which wraps the web app inside an Android `WebView` with custom native hooks.
+> ⚠️ **CRITICAL DIRECTIVE**: Always update `PROMPTS.md` with the user's latest todo based on the user's prompt, and for each completed task — update the task's review.
+> - Whenever a user sends new instructions or prompts, immediately document the specific tasks in `PROMPTS.md`.
+> - As tasks are executed and verified, mark them complete (`[x]`) and provide a clear, factual review of the implementation and verification.
 
 ---
 
-## 1. The Fundamental Platform Difference: Android vs. Web Browser
+## ⚠️ Critical Rule for Coding Agents: How Not to Break This Application
 
-### In the Android Native Shell (`android-shell/`):
+This repository contains an Android-focused architecture:
+1. **The Application is Dedicated for Android Devices**: The primary target is the Android Native Shell APK (`android-shell/`), running inside an Android `WebView` with custom native hooks, hardware TTS, and traffic interception.
+2. **Web-App Scoped Usage**: A web version is maintained strictly to **help drive app tests (Playwright, Cypress) and serve as an interactive live demo of the app**. The app is fundamentally an **Android machine focus** application.
+
+---
+
+## 1. The Fundamental Platform Difference: Android Native Focus vs. Scoped Web Companion
+
+### Android Machine Focus (Primary Dedicated Platform):
+- The app is designed and dedicated for deployment and usage on real Android devices and Android emulators.
 - The Android `WebView` runs with native permissions.
 - In `MainActivity.kt`, the `WebViewClient.shouldInterceptRequest()` callback intercepts **all** HTTP/HTTPS traffic traversing the WebView—including network requests generated inside the cross-origin `<iframe>` for YouTube (`youtube.com/api/timedtext`).
 - When an interception occurs, Android reads the stream, encodes the raw caption data to Base64, and calls `window.onNativeCaptionsInterceptedBase64(base64Payload)` into the web app.
 - Android also binds a native Java bridge: `window.AndroidNativeShell` for hardware TTS (`speak`, `stopSpeaking`) and toast notifications.
 
-### In a Standard Web Browser (Desktop / Mobile Chrome / Safari / Firefox):
+### Web Version Scope (Test Driver & App Demo Only):
+- The web browser build is **strictly scoped** to:
+  1. Driving automated CI/CD test suites (Playwright E2E and Cypress runner tests).
+  2. Providing an interactive live demo of the application (e.g. on GitHub Pages or local preview).
 - Web browsers enforce the **Same-Origin Policy (SOP)** and **iframe sandboxing**.
 - The parent web page **cannot** intercept, inspect, or eavesdrop on network requests or DOM elements inside the cross-origin YouTube player iframe (`https://www.youtube.com/embed/...`).
-- **CRITICAL PRINCIPLE**: Because a standard web app cannot access the cross-origin iframe sandbox files or network traffic, **web browser testing and standalone web usage MUST rely on mocking, local caching (`src/utils/subtitleCache.ts`), and server API fallbacks (`/api/fetch-subtitles`) for fetching subtitles**.
+- **CRITICAL PRINCIPLE**: Because a standard web app cannot access the cross-origin iframe sandbox files or network traffic, **web browser testing and demo usage MUST rely on mocking, local caching (`src/utils/subtitleCache.ts`), and server API fallbacks (`/api/fetch-subtitles`) for fetching subtitles**.
 - **DO NOT attempt to "fix" web iframe subtitle interception** by altering the Android native bridge or removing native hooks. Any attempt to eliminate the native interception mechanism will break the compiled Android APK!
 
 ---

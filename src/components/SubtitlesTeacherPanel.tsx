@@ -58,6 +58,8 @@ interface SubtitlesTeacherPanelProps {
   videoId?: string;
   onUpdateObservedTimedTextUrl?: (url: string) => void;
   onUpdateVideoSettings?: (videoId: string, settings: Partial<VideoSpecificSettings>) => void;
+  selectedTargetLang?: string | null;
+  onSelectTargetLang?: (langCode: string) => void;
 }
 
 const DEFAULT_TARGET_LANGUAGES: TargetLanguage[] = [
@@ -109,6 +111,8 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
   videoId,
   onUpdateObservedTimedTextUrl,
   onUpdateVideoSettings,
+  selectedTargetLang,
+  onSelectTargetLang,
 }: SubtitlesTeacherPanelProps) => {
   const dispatch = useAppDispatch();
   const [targetLanguages, setTargetLanguages] = useState<TargetLanguage[]>(() => {
@@ -438,6 +442,7 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
     }
     setTargetLanguages(updatedLangs);
     persistCurrentVideoSettings(updatedLangs, playOrder, code);
+    onSelectTargetLang?.(code);
 
     logInfo('Translation', `Target language switched to ${code}. Fetching native timedtext translation (tlang=${code})...`);
     dispatch(
@@ -485,6 +490,13 @@ export const SubtitlesTeacherPanel: React.FC<SubtitlesTeacherPanelProps> = ({
       });
     }
   };
+
+  // Synchronize when selectedTargetLang prop from parent updates
+  useEffect(() => {
+    if (selectedTargetLang && selectedTargetLang !== activeTargetLang) {
+      handleSelectActiveTargetLang(selectedTargetLang);
+    }
+  }, [selectedTargetLang]);
 
   const toggleLanguage = (id: string) => {
     setTargetLanguages((prev) => {

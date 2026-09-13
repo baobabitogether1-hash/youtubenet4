@@ -48,7 +48,7 @@ import {
   saveObservedTimedTextUrl,
 } from './utils/subtitleCache';
 import { trackNetworkRequest } from './utils/networkInterceptor';
-import { ShieldAlert, CheckCircle2, Subtitles, X, RefreshCw } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Subtitles, X, RefreshCw, Sparkles } from 'lucide-react';
 import { SettingsModal } from './components/SettingsModal';
 import { ActivityLogModal } from './components/ActivityLogModal';
 import { ApkUpdateModal } from './components/ApkUpdateModal';
@@ -743,13 +743,18 @@ export default function App() {
     setFetchError(null);
     setSharedLinkComplaint(null);
 
+    const vSettings = loadVideoSettings(item.id);
+    const resolvedLang = item.activeTargetLang || vSettings?.activeTargetLang || 'it';
+    setSelectedTargetLang(resolvedLang);
+    setVideoTargetLang(item.id, resolvedLang);
+
     if (item.targetLanguages && item.targetLanguages.length > 0) {
       saveVideoSettings(item.id, {
         targetLanguages: item.targetLanguages,
-        ttsRates: item.ttsRates,
-        playOrder: item.playOrder,
-        sourceLang: item.sourceLang,
-        activeTargetLang: item.activeTargetLang,
+        ttsRates: item.ttsRates || vSettings?.ttsRates,
+        playOrder: item.playOrder || vSettings?.playOrder,
+        sourceLang: item.sourceLang || vSettings?.sourceLang,
+        activeTargetLang: resolvedLang,
       });
     }
 
@@ -772,13 +777,14 @@ export default function App() {
   };
 
   const handleUpdateVideoSettings = (vid: string, newSettings: Partial<VideoSpecificSettings>) => {
+    saveVideoSettings(vid, newSettings);
     setLibrary((prev) =>
       prev.map((item) =>
         item.id === vid
           ? {
               ...item,
               targetLanguages: newSettings.targetLanguages || item.targetLanguages,
-              ttsRates: newSettings.ttsRates || item.ttsRates,
+              ttsRates: newSettings.ttsRates ? { ...item.ttsRates, ...newSettings.ttsRates } : item.ttsRates,
               playOrder: newSettings.playOrder || item.playOrder,
               sourceLang: newSettings.sourceLang || item.sourceLang,
               activeTargetLang: newSettings.activeTargetLang || item.activeTargetLang,
@@ -786,6 +792,35 @@ export default function App() {
           : item
       )
     );
+    if (vid === videoId && newSettings.activeTargetLang) {
+      setSelectedTargetLang(newSettings.activeTargetLang);
+      setVideoTargetLang(vid, newSettings.activeTargetLang);
+    }
+  };
+
+  // Synchronize target language update across UI, subtitles workspace, and translations
+  const handleUpdateTargetLang = (langCode: string) => {
+    setSelectedTargetLang(langCode);
+    setVideoTargetLang(videoId, langCode);
+    handleUpdateVideoSettings(videoId, { activeTargetLang: langCode });
+
+    dispatch(
+      transition({
+        to: 'syncing_tts',
+        actionName: 'TARGET_LANGUAGE_CHANGED',
+        payload: { videoId, targetLang: langCode },
+      })
+    );
+
+    if (activeCue?.text) {
+      translateText(activeCue.text, 'auto', langCode)
+        .then((t) => setTranslatedCueText(t))
+        .catch(() => setTranslatedCueText(null));
+    }
+
+    logInfo('Language', `Target language updated to "${langCode}" for video ${videoId}`);
+    setRestoredToast(`Target language updated to ${langCode.toUpperCase()}`);
+    setTimeout(() => setRestoredToast(null), 3000);
   };
 
   const handleSaveCurrentToLibrary = (title: string) => {
@@ -888,6 +923,40 @@ export default function App() {
           </div>
         )}
 
+        {/* Newer APK available banner in compact view */}
+        {hasApkUpdate && (
+          <div
+            id="compact-apk-update-banner"
+            data-testid="compact-apk-update-banner"
+            className="absolute top-4 left-4 right-4 z-40 p-3 rounded-xl bg-emerald-950/95 border border-emerald-500/80 text-emerald-200 text-xs shadow-2xl flex items-center justify-between gap-3 animate-fadeIn"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="truncate">
+                New version <strong className="font-mono text-white">{latestApkTag}</strong> is available!
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                id="open-apk-update-banner-btn"
+                onClick={() => setIsApkUpdateModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] shadow transition active:scale-95"
+              >
+                Update APK
+              </button>
+              <button
+                type="button"
+                onClick={() => setHasApkUpdate(false)}
+                className="p-1 text-emerald-400 hover:text-emerald-200"
+                title="Dismiss banner"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Main Video Player in Full Screen / Compact View */}
         <div className="flex-1 w-full h-full relative">
           <VideoPlayer
@@ -946,10 +1015,11 @@ export default function App() {
           videoId={videoId}
           onClose={() => setIsTargetLangModalOpen(false)}
           currentSelectedLang={selectedTargetLang}
-          onSelectLanguage={(langCode) => {
-            setSelectedTargetLang(langCode);
-            setVideoTargetLang(videoId, langCode);
-            logInfo('Language', `Selected target language "${langCode}" for video ${videoId}`);
+          onSelectLanguage={handleUpdateTargetLang}
+          onUpdateTtsRate={(langCode, rate) => {
+            handleUpdateVideoSettings(videoId, {
+              ttsRates: { [langCode]: rate },
+            });
           }}
         />
 
@@ -963,6 +1033,7 @@ export default function App() {
           onSelectVideo={handleSelectLibraryItem}
           onSaveCurrentToLibrary={handleSaveCurrentToLibrary}
           onRemoveFromLibrary={handleRemoveFromLibrary}
+          onUpdateVideoSettings={handleUpdateVideoSettings}
         />
 
         {/* Share Link with App Modal */}
@@ -1028,6 +1099,47 @@ export default function App() {
             theaterMode ? 'max-w-7xl' : 'max-w-5xl'
           }`}
         >
+          {/* Newer APK Available Banner in Expanded View */}
+          {hasApkUpdate && (
+            <div
+              id="expanded-apk-update-banner"
+              data-testid="expanded-apk-update-banner"
+              className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border border-emerald-500/70 text-emerald-100 shadow-xl flex items-center justify-between gap-4 animate-fadeIn"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-emerald-300">
+                    Newer Version Available ({latestApkTag})
+                  </h3>
+                  <p className="text-xs text-emerald-200/80 mt-0.5">
+                    A newer release of YouTube Subtitle &amp; Speech Flow Viewer is ready for installation.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  id="expanded-apk-update-btn"
+                  onClick={() => setIsApkUpdateModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg shadow-emerald-950 transition active:scale-95"
+                >
+                  Download &amp; Install
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHasApkUpdate(false)}
+                  className="p-1.5 text-emerald-400 hover:text-emerald-200"
+                  title="Dismiss banner"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Shared Link Complaint Banner: The app will complain if it's not a YouTube link */}
           {sharedLinkComplaint && (
             <div
@@ -1171,6 +1283,8 @@ export default function App() {
             playerRef={playerRef}
             observedTimedTextUrl={observedTimedTextUrl}
             videoId={videoId}
+            selectedTargetLang={selectedTargetLang}
+            onSelectTargetLang={handleUpdateTargetLang}
             onUpdateVideoSettings={handleUpdateVideoSettings}
             onUpdateObservedTimedTextUrl={(newUrl) => {
               saveObservedTimedTextUrl(videoId, newUrl);
@@ -1206,10 +1320,11 @@ export default function App() {
         videoId={videoId}
         onClose={() => setIsTargetLangModalOpen(false)}
         currentSelectedLang={selectedTargetLang}
-        onSelectLanguage={(langCode) => {
-          setSelectedTargetLang(langCode);
-          setVideoTargetLang(videoId, langCode);
-          logInfo('Language', `Selected target language "${langCode}" for video ${videoId}`);
+        onSelectLanguage={handleUpdateTargetLang}
+        onUpdateTtsRate={(langCode, rate) => {
+          handleUpdateVideoSettings(videoId, {
+            ttsRates: { [langCode]: rate },
+          });
         }}
       />
 
@@ -1223,6 +1338,7 @@ export default function App() {
         onSelectVideo={handleSelectLibraryItem}
         onSaveCurrentToLibrary={handleSaveCurrentToLibrary}
         onRemoveFromLibrary={handleRemoveFromLibrary}
+        onUpdateVideoSettings={handleUpdateVideoSettings}
       />
 
       {/* Share Link with App Modal */}

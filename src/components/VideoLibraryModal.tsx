@@ -10,8 +10,16 @@ import {
   ExternalLink,
   Search,
   Check,
+  Globe,
+  Gauge,
 } from 'lucide-react';
 import { LibraryVideoItem, CaptionCue } from '../types';
+import {
+  loadVideoSettings,
+  saveVideoSettings,
+  getUserLearningLanguages,
+  VideoSpecificSettings,
+} from '../utils/appSettings';
 
 interface VideoLibraryModalProps {
   isOpen: boolean;
@@ -22,6 +30,7 @@ interface VideoLibraryModalProps {
   onSelectVideo: (item: LibraryVideoItem) => void;
   onSaveCurrentToLibrary: (title: string) => void;
   onRemoveFromLibrary: (id: string) => void;
+  onUpdateVideoSettings?: (videoId: string, settings: Partial<VideoSpecificSettings>) => void;
 }
 
 export const VideoLibraryModal: React.FC<VideoLibraryModalProps> = ({
@@ -33,11 +42,13 @@ export const VideoLibraryModal: React.FC<VideoLibraryModalProps> = ({
   onSelectVideo,
   onSaveCurrentToLibrary,
   onRemoveFromLibrary,
+  onUpdateVideoSettings,
 }) => {
   const [search, setSearch] = useState('');
   const [saveTitle, setSaveTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const learningLangs = getUserLearningLanguages();
 
   if (!isOpen) return null;
 
@@ -56,6 +67,11 @@ export const VideoLibraryModal: React.FC<VideoLibraryModalProps> = ({
     setIsSaving(false);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleQuickLanguageChange = (itemId: string, newLang: string) => {
+    saveVideoSettings(itemId, { activeTargetLang: newLang });
+    onUpdateVideoSettings?.(itemId, { activeTargetLang: newLang });
   };
 
   return (
@@ -174,6 +190,12 @@ export const VideoLibraryModal: React.FC<VideoLibraryModalProps> = ({
           ) : (
             filtered.map((item) => {
               const isCurrent = item.id === currentVideoId;
+              const vSettings = loadVideoSettings(item.id);
+              const activeLang = item.activeTargetLang || vSettings?.activeTargetLang || 'it';
+              const ttsRate =
+                (item.ttsRates && item.ttsRates[activeLang]) ||
+                (vSettings?.ttsRates && vSettings?.ttsRates[activeLang]) ||
+                1.0;
 
               return (
                 <div
@@ -205,12 +227,36 @@ export const VideoLibraryModal: React.FC<VideoLibraryModalProps> = ({
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 text-[11px] text-neutral-400 mt-1 font-mono">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-400 mt-1 font-mono">
                         <span>ID: {item.id}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1 text-emerald-400">
                           <Subtitles className="w-3 h-3" />
-                          {item.cues?.length || 0} cues cached
+                          {item.cues?.length || 0} cues
+                        </span>
+                        <span>•</span>
+                        <div
+                          className="flex items-center gap-1 bg-indigo-950/60 border border-indigo-800/60 rounded px-1.5 py-0.5 text-indigo-300 font-sans"
+                          title="Target Language for this video"
+                        >
+                          <Globe className="w-3 h-3 text-indigo-400" />
+                          <select
+                            id={`video-target-lang-select-${item.id}`}
+                            value={activeLang}
+                            onChange={(e) => handleQuickLanguageChange(item.id, e.target.value)}
+                            className="bg-transparent text-indigo-200 text-[10px] uppercase font-mono cursor-pointer border-none outline-none py-0 pr-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {learningLangs.map((c) => (
+                              <option key={c} value={c} className="bg-neutral-900 text-white">
+                                {c.toUpperCase()}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <span className="flex items-center gap-1 text-amber-300 px-1.5 py-0.5 rounded bg-amber-950/40 border border-amber-800/50">
+                          <Gauge className="w-3 h-3 text-amber-400" />
+                          <span>{ttsRate}x</span>
                         </span>
                       </div>
                     </div>
